@@ -4,6 +4,7 @@ project (libhttpwebserver_socket
          DESCRIPTION "TCP/IP Socket Library")
 
 include (CheckIncludeFiles)
+include (CheckIncludeFileCxx)
 
 set (CMAKE_CXX_STANDARD 14)
 
@@ -62,12 +63,14 @@ if (WIN32)
 endif ()
 # no support for the weirdos using APPLE
 
-#check_include_file ("dlfcn.h" HAVE_DLFCN)
-#message (STATUS "Searching for dlfcn")
-#if (NOT HAVE_DLFCN)
-#    message (FATAL_ERROR "cannot find dlfcn.h")
-#endif ()
-#
+if (LOSER)
+    check_include_file_cxx ("winsock2.h" HAVE_WINSOCK2)
+    message (STATUS "Searching for winsock2")
+    if (NOT HAVE_WINSOCK2)
+        message (FATAL_ERROR "cannot find winsock2.h")
+    endif ()
+endif ()
+
 #check_include_file ("fcntl.h" HAVE_FCNTL)
 #message (STATUS "Searching for fcntl")
 #if (NOT HAVE_FCNTL)
@@ -97,7 +100,7 @@ endif ()
 
 #---------------------------------------------------------------------
 
-set (SOURCE_FILES "." "socket.cpp")
+set (SOURCE_FILES "socket.cpp")
 if (LOSER)
     list (APPEND SOURCE_FILES "manifest.rc")
 endif ()
@@ -227,10 +230,11 @@ target_compile_options (${BINARY_NAME} PRIVATE ${COMMON_COMPILE_OPTIONS}
                         ${COMMON_DEBUG_COMPILE_OPTTIONS})
 set_property (TARGET ${BINARY_NAME} PROPERTY CXX_STANDARD 14)
 
-#target_link_libraries (${BINARY_NAME} "httpwebserver_interface"
-#                                      "magic" # magic
-#                                      "dl" # dlfcn
-#                                      )
+set (COMMON_LINK_LIBRARIES "")
+if (LOSER)
+    list (APPEND COMMON_LINK_LIBRARIES "wsock32")
+endif ()
+target_link_libraries (${BINARY_NAME} ${COMMON_LINK_LIBRARIES})
 
 target_include_directories(${BINARY_NAME}
                            PUBLIC "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>"

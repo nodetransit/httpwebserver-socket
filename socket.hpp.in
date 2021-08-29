@@ -30,12 +30,18 @@
 #
 #endif /* HTTPWEBSERVER_SOCKET_LIB_EXPORT */
 
+#ifdef LOSER
+#   include <winsock2.h>
+#   include <ws2tcpip.h>
+#endif
+
 namespace nt { namespace http {
 
 class __HttpWebServerSocketPort__ Socket
 {
 public:
     Socket();
+    ~Socket();
 };
 
 }}
