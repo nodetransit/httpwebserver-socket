@@ -1,0 +1,44 @@
+#ifndef HTTPWEBSERVER_SOCKET_HPP__
+#define HTTPWEBSERVER_SOCKET_HPP__
+
+#cmakedefine HTTPWEBSERVER_LIB_EXPORT_SHARED
+#cmakedefine HTTPWEBSERVER_LIB_EXPORT_STATIC
+#cmakedefine LINUX
+#cmakedefine LOSER
+
+#ifdef HTTPWEBSERVER_SOCKET_LIB_EXPORT /* inside DLL, export functons */
+#
+#   ifdef _MSC_VER
+#       define __HttpWebServerSocketPort__  __declspec(dllexport)
+#   elif __GNUC__
+#       define __HttpWebServerSocketPort__  __attribute__((visibility("default")))
+#   else
+#       define __HttpWebServerSocketPort__
+#       pragma warning Unknown dynamic link export semantic.
+#   endif
+#
+#elif !defined HTTPWEBSERVER_SOCKET_LIB_EXPORT /* compile as static */
+#
+#   ifdef _MSC_VER
+#       define __HttpWebServerSocketPort__  __declspec(dllimport)
+#   elif __GNUC__
+#       define __HttpWebServerSocketPort__
+#   else
+#       define __HttpWebServerSocketPort__
+#       pragma warning Unknown dynamic link import semantic.
+#   endif
+#
+#endif /* HTTPWEBSERVER_SOCKET_LIB_EXPORT */
+
+namespace nt { namespace http {
+
+class __HttpWebServerSocketPort__ Socket
+{
+public:
+    Socket();
+};
+
+}}
+
+#endif /* HTTPWEBSERVER_SOCKET_HPP__ */
+
