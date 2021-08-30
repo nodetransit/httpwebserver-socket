@@ -37,11 +37,25 @@
 
 namespace nt { namespace http {
 
+typedef void (* event_callback)(void*, void*);
+
 class __HttpWebServerSocketPort__ Socket
 {
+private:
+    unsigned short port;
+    unsigned int connection_count;
+
 public:
     Socket();
     ~Socket();
+
+    void bind(const unsigned short);
+    void listen(const unsigned int, event_callback);
+    void open();
+    void close();
+
+private:
+    void accept();
 };
 
 }}
