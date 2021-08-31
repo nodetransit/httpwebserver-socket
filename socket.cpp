@@ -78,7 +78,7 @@ Socket::Socket() :
     std::cout << "socket" << std::endl;
 }
 
-Socket::~Socket()
+Socket::~Socket() noexcept
 {
 #ifdef LOSER
     if (::WSACleanup() == SOCKET_ERROR) {

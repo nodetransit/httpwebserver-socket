@@ -4,7 +4,7 @@ project (libhttpwebserver_socket
          DESCRIPTION "TCP/IP Socket Library")
 
 include (CheckIncludeFiles)
-include (CheckIncludeFileCxx)
+include (CheckIncludeFileCXX)
 
 set (CMAKE_CXX_STANDARD 14)
 
@@ -100,7 +100,8 @@ endif ()
 
 #---------------------------------------------------------------------
 
-set (SOURCE_FILES "socket.cpp")
+set (SOURCE_FILES "interfaces/socket.cpp"
+                  "socket.cpp")
 if (LOSER)
     list (APPEND SOURCE_FILES "manifest.rc")
 endif ()
@@ -115,7 +116,7 @@ endif ()
 set (BINARY_NAME "httpwebserver_socket")
 add_library (${BINARY_NAME} ${HTTPWEBSERVER_LIB_TYPE} ${SOURCE_FILES})
 
-configure_file ("${CMAKE_CURRENT_SOURCE_DIR}/socket.hpp.in" "${CMAKE_CURRENT_SOURCE_DIR}/socket.hpp")
+configure_file ("${CMAKE_CURRENT_SOURCE_DIR}/interfaces/socket.hpp.in" "${CMAKE_CURRENT_SOURCE_DIR}/interfaces/socket.hpp")
 if (LOSER)
     configure_file ("${CMAKE_CURRENT_SOURCE_DIR}/manifest.rc.in" "${CMAKE_CURRENT_SOURCE_DIR}/manifest.rc")
 endif ()

@@ -1,5 +1,5 @@
-#ifndef HTTPWEBSERVER_SOCKET_HPP__
-#define HTTPWEBSERVER_SOCKET_HPP__
+#ifndef HTTPWEBSERVER_SOCKET_HPP_INTERFACE__
+#define HTTPWEBSERVER_SOCKET_HPP_INTERFACE__
 
 #cmakedefine HTTPWEBSERVER_LIB_EXPORT_SHARED
 #cmakedefine HTTPWEBSERVER_LIB_EXPORT_STATIC
@@ -35,19 +35,15 @@
 #   include <ws2tcpip.h>
 #endif
 
-namespace nt { namespace http {
+namespace nt { namespace http { namespace interfaces {
 
 typedef void (* event_callback)(void*, void*);
 
-class __HttpWebServerSocketPort__ Socket
+class Socket
 {
-private:
-    unsigned short port;
-    unsigned int connection_count;
-
 public:
-    Socket();
-    ~Socket();
+    Socket() = default;
+    virtual ~Socket() noexcept = 0;
 
     void bind(const unsigned short);
     void listen(const unsigned int, event_callback);
@@ -58,7 +54,7 @@ private:
     void accept();
 };
 
-}}
+}}}
 
-#endif /* HTTPWEBSERVER_SOCKET_HPP__ */
+#endif /* HTTPWEBSERVER_SOCKET_HPP_INTERFACE__ */
 
