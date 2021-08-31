@@ -7,8 +7,12 @@
 using namespace nt::http;
 
 Socket::Socket() :
-    port(80),
-    connection_count(8)
+    port(0),
+    connection_count(0),
+#ifdef LOSER
+    socket(NULL),
+#endif
+    is_open(false)
 {
 #ifdef LOSER
     int     ret;
@@ -20,33 +24,81 @@ Socket::Socket() :
         throw std::runtime_error(error.c_str());
     }
 
-    SOCKET server = ::socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
+    socket = ::socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
 
-    if (server == INVALID_SOCKET) {
+    if (socket == INVALID_SOCKET) {
         int error = ::WSAGetLastError();
         // todo error handling
         throw std::runtime_error("Invalid socket");
     }
 
+    is_open = true;
+#endif
+
+    std::cout << "creating socket" << std::endl;
+}
+
+Socket::~Socket() noexcept
+{
+    if (is_open) {
+#ifdef LOSER
+        close_socket(socket);
+#endif
+    }
+
+#ifdef LOSER
+    if (::WSACleanup() == SOCKET_ERROR) {
+        int         ret   = WSAGetLastError();
+        std::string error = "WSACleanup failed with error " + ret;
+
+        std::cerr << error << std::endl;
+        // throw std::runtime_error(error.c_str());
+    }
+#endif
+}
+
+void
+Socket::bind(const unsigned short p)
+{
+    port = p;
+
+#ifdef LOSER
     SOCKADDR_IN server_address = {};
 
     server_address.sin_family      = AF_INET;
     server_address.sin_port        = ::htons(port);
     server_address.sin_addr.s_addr = ::htonl(INADDR_ANY);
 
-    if (::bind(server, (SOCKADDR*)&server_address, sizeof(server_address)) == SOCKET_ERROR) {
+    if (::bind(socket, (SOCKADDR*)&server_address, sizeof(server_address)) == SOCKET_ERROR) {
         int error = ::WSAGetLastError();
         // todo error handling
         throw std::runtime_error("Invalid socket");
     }
+#endif
+}
 
-    if(::listen(server, connection_count) == SOCKET_ERROR) {
+void
+Socket::listen(const unsigned int count, event_callback callback)
+{
+    connection_count = count;
+
+#ifdef LOSER
+    if(::listen(socket, connection_count) == SOCKET_ERROR) {
         int error = ::WSAGetLastError();
-        // todo error handling, close server socket
+
+        close_socket(socket);
+
+        // todo error handling
         throw std::runtime_error("Invalid socket");
     }
+#endif
+}
 
-    SOCKET client = ::accept(server, nullptr, nullptr);
+void
+Socket::open()
+{
+#ifdef LOSER
+    SOCKET client = ::accept(socket, nullptr, nullptr);
 
     if(client == INVALID_SOCKET) {
         int error = ::WSAGetLastError();
@@ -59,34 +111,30 @@ Socket::Socket() :
                            "Content-Length: 0\r\n\r\n";
 
     ::send(client, response.c_str(), response.size(), 0);
-
-    if(::shutdown(client, SD_BOTH) == SOCKET_ERROR) {
-        int error = ::WSAGetLastError();
-        // todo error handling
-    }
-
-    ::closesocket(client);
-
-    if(::shutdown(server, SD_BOTH) == SOCKET_ERROR) {
-        int error = ::WSAGetLastError();
-        // todo error handling
-    }
-
-    ::closesocket(server);
+    close_socket(client);
 #endif
-
-    std::cout << "socket" << std::endl;
 }
 
-Socket::~Socket() noexcept
+void
+Socket::close()
 {
+    std::cout << "closing socket" << std::endl;
 #ifdef LOSER
-    if (::WSACleanup() == SOCKET_ERROR) {
-        int         ret   = WSAGetLastError();
-        std::string error = "WSACleanup failed with error " + ret;
-
-        std::cerr << error << std::endl;
-        // throw std::runtime_error(error.c_str());
-    }
+    close_socket(socket);
 #endif
+
+    is_open = false;
 }
+
+#ifdef LOSER
+void
+Socket::close_socket(SOCKET s)
+{
+    if(::shutdown(s, SD_BOTH) == SOCKET_ERROR) {
+        int error = ::WSAGetLastError();
+        // todo error handling
+    }
+
+    ::closesocket(s);
+}
+#endif

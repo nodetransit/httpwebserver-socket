@@ -39,19 +39,16 @@ namespace nt { namespace http { namespace interfaces {
 
 typedef void (* event_callback)(void*, void*);
 
-class Socket
+class __HttpWebServerSocketPort__ Socket
 {
 public:
     Socket() = default;
     virtual ~Socket() noexcept = 0;
 
-    void bind(const unsigned short);
-    void listen(const unsigned int, event_callback);
-    void open();
-    void close();
-
-private:
-    void accept();
+    virtual void bind(const unsigned short) = 0;
+    virtual void listen(const unsigned int, event_callback) = 0;
+    virtual void open() = 0;
+    virtual void close() = 0;
 };
 
 }}}
