@@ -13,7 +13,7 @@ namespace nt { namespace http {
 typedef void (* event_callback)(void*, void*);
 
 class __HttpWebServerSocketPort__ Socket :
-      nt::http::interfaces::Socket
+      public nt::http::interfaces::Socket
 {
 private:
     unsigned short port;
@@ -27,7 +27,7 @@ private:
 
 public:
     Socket();
-    virtual ~Socket() noexcept;
+    ~Socket() noexcept;
 
     void bind(const unsigned short);
     void listen(const unsigned int, event_callback);

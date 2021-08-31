@@ -42,7 +42,7 @@ Socket::~Socket() noexcept
 {
     if (is_open) {
 #ifdef LOSER
-        close_socket(socket);
+        close();
 #endif
     }
 
@@ -103,12 +103,30 @@ Socket::open()
     if(client == INVALID_SOCKET) {
         int error = ::WSAGetLastError();
         // todo error handling
+        throw std::runtime_error("unable to create client");
     }
+
+    sockaddr_in client_info     = {};
+    int         client_info_len = sizeof(sockaddr_in);
+
+    if (::getpeername(client, (sockaddr*)(&client_info), &client_info_len) == SOCKET_ERROR) {
+        int error = ::WSAGetLastError();
+        // todo error handling
+        throw std::runtime_error("unable to get name");
+    }
+
+    std::string client_ip = ::inet_ntoa(client_info.sin_addr);
+
+    std::string body = "<p>client ip:" + client_ip +
+                       "</p>"
+                       "<a href=''>refresh</a>"
+                       "\r\n";
 
     std::string response = "HTTP/1.1 200 OK\r\n"
                            "Content-Type: text/html; charset=UTF-8\r\n"
                            "Connection: keep-alive\r\n"
-                           "Content-Length: 0\r\n\r\n";
+                           "Content-Length: " + std::to_string(body.size()) + "\r\n\r\n" +
+                           body.c_str();
 
     ::send(client, response.c_str(), response.size(), 0);
     close_socket(client);

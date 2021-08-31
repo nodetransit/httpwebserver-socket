@@ -143,7 +143,9 @@ if (NOT MSVC)
                                                    "-Wno-unused-function"
                                                    "-Wno-format")
     endif ()
-
+else ()
+    list (APPEND COMMON_COMPILE_OPTIONS "-GR"
+          )
 endif ()
 
 if (DEBUG OR DEBUGINFO)

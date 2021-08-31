@@ -1,5 +1,8 @@
 #include <iostream>
 #include <cstdlib>
+#include <memory>
+#include <exception>
+#include <typeinfo>
 
 #include "socket.hpp"
 
@@ -15,16 +18,33 @@ run(nt::http::interfaces::Socket* socket)
     socket->bind(80);
     socket->listen(8, callback);
     socket->open();
-    socket->close();
+    // socket->close();
+}
+
+static void
+_main()
+{
+    auto socket = std::make_unique<nt::http::Socket>();
+    auto s      = dynamic_cast<nt::http::interfaces::Socket*>(socket.get());
+
+    if (s == nullptr) {
+        throw std::bad_cast();
+    }
+
+    run(s);
+    // run((nt::http::interfaces::Socket*)socket.get());
 }
 
 int
 main(int, char**)
 {
-    nt::http::Socket socket;
+    try {
+        _main();
+        return EXIT_SUCCESS;
+    } catch (std::bad_cast& ex) {
+        std::cout << "dynamic cast failed" << std::endl;
 
-    // run(dynamic_cast<nt::http::interfaces::Socket*>(&socket));
-    run((nt::http::interfaces::Socket*)&socket);
+        return EXIT_FAILURE;
+    }
 
-    return EXIT_SUCCESS;
 }
