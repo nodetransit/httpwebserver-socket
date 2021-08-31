@@ -6,6 +6,17 @@
 #ifdef LOSER
 #   include <winsock2.h>
 #   include <ws2tcpip.h>
+#elif defined(LINUX)
+#   include <sys/types.h>
+#   include <sys/socket.h>
+#   include <netinet/in.h>
+#   include <arpa/inet.h>
+#   include <unistd.h>
+#   include <errno.h>
+#
+#    define SOCKET         int
+#    define SOCKET_ERROR   -1
+#    define INVALID_SOCKET -1
 #endif
 
 namespace nt { namespace http {
@@ -19,9 +30,7 @@ private:
     unsigned short port;
     unsigned int connection_count;
 
-#ifdef LOSER
     SOCKET socket;
-#endif
 
     bool is_open;
 
@@ -35,11 +44,8 @@ public:
     void close();
 
 private:
-    void accept();
-
-#ifdef LOSER
+    void create_socket();
     void close_socket(SOCKET);
-#endif
 };
 
 }}

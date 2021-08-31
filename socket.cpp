@@ -11,29 +11,12 @@ Socket::Socket() :
     connection_count(0),
 #ifdef LOSER
     socket(NULL),
+#elif defined(LINUX)
+      socket(0),
 #endif
     is_open(false)
 {
-#ifdef LOSER
-    int     ret;
-    WSADATA wsaData;
-
-    if ((ret = ::WSAStartup(MAKEWORD(2, 2), &wsaData)) != 0) {
-        std::string error = "WSAStartup failed with error " + ret;
-
-        throw std::runtime_error(error.c_str());
-    }
-
-    socket = ::socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
-
-    if (socket == INVALID_SOCKET) {
-        int error = ::WSAGetLastError();
-        // todo error handling
-        throw std::runtime_error("Invalid socket");
-    }
-
-    is_open = true;
-#endif
+    create_socket();
 
     std::cout << "creating socket" << std::endl;
 }
@@ -41,9 +24,7 @@ Socket::Socket() :
 Socket::~Socket() noexcept
 {
     if (is_open) {
-#ifdef LOSER
         close();
-#endif
     }
 
 #ifdef LOSER
@@ -58,23 +39,90 @@ Socket::~Socket() noexcept
 }
 
 void
+Socket::create_socket()
+{
+#ifdef LOSER
+    int     ret;
+    WSADATA wsaData;
+
+    if ((ret = ::WSAStartup(MAKEWORD(2, 2), &wsaData)) != 0) {
+        std::string error = "WSAStartup failed with error " + ret;
+
+        throw std::runtime_error(error.c_str());
+    }
+
+    socket = ::socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
+
+#elif defined(LINUX)
+    socket = ::socket(AF_INET, SOCK_STREAM, 0);
+#endif
+
+    if (socket == INVALID_SOCKET) {
+#ifdef LOSER
+        int error = ::WSAGetLastError();
+        // todo error handling
+        throw std::runtime_error("Invalid socket");
+#elif defined(LINUX)
+        std::string error = "fail to create socket";
+
+        switch (errno) {
+            // todo get error message
+        default:
+            break;
+        }
+
+        throw std::runtime_error(error.c_str());
+#endif
+    }
+
+    static const int ONE = 1;
+
+#ifdef LOSER
+    int setopt_result = ::setsockopt(socket, SOL_SOCKET, SO_REUSEADDR, (char*)&ONE, sizeof(ONE));
+#elif defined(LINUX)
+    int setopt_result = ::setsockopt(socket, SOL_SOCKET, SO_REUSEPORT, &ONE, sizeof(ONE));
+#endif
+
+    if(setopt_result == SOCKET_ERROR) {
+#ifdef LOSER
+#elif defined(LINUX)
+#endif
+        throw std::runtime_error("unable to set socket option");
+    }
+
+    is_open = true;
+}
+
+void
 Socket::bind(const unsigned short p)
 {
     port = p;
 
-#ifdef LOSER
-    SOCKADDR_IN server_address = {};
+    sockaddr_in server_address = {};
 
     server_address.sin_family      = AF_INET;
     server_address.sin_port        = ::htons(port);
     server_address.sin_addr.s_addr = ::htonl(INADDR_ANY);
 
-    if (::bind(socket, (SOCKADDR*)&server_address, sizeof(server_address)) == SOCKET_ERROR) {
+    if (::bind(socket, (sockaddr*)&server_address, sizeof(server_address)) == SOCKET_ERROR) {
+#ifdef LOSER
         int error = ::WSAGetLastError();
         // todo error handling
         throw std::runtime_error("Invalid socket");
-    }
+#elif defined(LINUX)
+        std::string error = "fail to bind socket";
+
+        switch (errno) {
+            // todo get error message
+        default:
+            break;
+        }
+
+        error += " " + std::to_string(errno);
+
+        throw std::runtime_error(error.c_str());
 #endif
+    }
 }
 
 void
@@ -82,36 +130,67 @@ Socket::listen(const unsigned int count, event_callback callback)
 {
     connection_count = count;
 
+    int listen_result = ::listen(socket, connection_count);
+
+    if(listen_result == SOCKET_ERROR) {
 #ifdef LOSER
-    if(::listen(socket, connection_count) == SOCKET_ERROR) {
         int error = ::WSAGetLastError();
 
         close_socket(socket);
 
         // todo error handling
         throw std::runtime_error("Invalid socket");
-    }
+#elif defined(LINUX)
+        std::string error = "fail to create listen";
+
+        switch (errno) {
+            // todo get error message
+        default:
+            break;
+        }
+
+        throw std::runtime_error(error.c_str());
 #endif
+    }
 }
 
 void
 Socket::open()
 {
-#ifdef LOSER
     SOCKET client = ::accept(socket, nullptr, nullptr);
 
     if(client == INVALID_SOCKET) {
+#ifdef LOSER
         int error = ::WSAGetLastError();
         // todo error handling
         throw std::runtime_error("unable to create client");
+#elif defined(LINUX)
+        std::string error = "fail to create client";
+
+        switch (errno) {
+            // todo get error message
+        default:
+            break;
+        }
+
+        throw std::runtime_error(error.c_str());
+#endif
     }
 
     sockaddr_in client_info     = {};
     int         client_info_len = sizeof(sockaddr_in);
 
-    if (::getpeername(client, (sockaddr*)(&client_info), &client_info_len) == SOCKET_ERROR) {
+#ifdef LOSER
+    int getpeername_result = ::getpeername(client, (sockaddr*)(&client_info), &client_info_len);
+#elif defined(LINUX)
+    int getpeername_result = ::getpeername(client, (sockaddr*)(&client_info), (socklen_t*)&client_info_len);
+#endif
+
+    if (getpeername_result == SOCKET_ERROR) {
+#ifdef LOSER
         int error = ::WSAGetLastError();
         // todo error handling
+#endif
         throw std::runtime_error("unable to get name");
     }
 
@@ -128,31 +207,52 @@ Socket::open()
                            "Content-Length: " + std::to_string(body.size()) + "\r\n\r\n" +
                            body.c_str();
 
+    std::cout << "sending response" << std::endl;
+
     ::send(client, response.c_str(), response.size(), 0);
     close_socket(client);
-#endif
 }
 
 void
 Socket::close()
 {
     std::cout << "closing socket" << std::endl;
-#ifdef LOSER
+
     close_socket(socket);
-#endif
 
     is_open = false;
 }
 
-#ifdef LOSER
 void
 Socket::close_socket(SOCKET s)
 {
-    if(::shutdown(s, SD_BOTH) == SOCKET_ERROR) {
-        int error = ::WSAGetLastError();
+#ifdef LOSER
+    int shutdown_result = ::shutdown(s, SD_BOTH);
+#elif defined(LINUX)
+    int shutdown_result = ::shutdown(s, SHUT_RDWR);
+#endif
+
+    if(shutdown_result == SOCKET_ERROR) {
         // todo error handling
+#ifdef LOSER
+        int error = ::WSAGetLastError();
+        throw std::runtime_error("unable to shutdown socket");
+#elif defined(LINUX)
+        std::string error = "fail to shutdown client";
+
+        switch (errno) {
+            // todo get error message
+        default:
+            break;
+        }
+
+        throw std::runtime_error(error.c_str());
+#endif
     }
 
+#ifdef LOSER
     ::closesocket(s);
-}
+#elif defined(LINUX)
+    ::close(s);
 #endif
+}
