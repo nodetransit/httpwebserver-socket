@@ -379,7 +379,14 @@ Socket::open()
 #endif
 
     if (getpeername_result == SOCKET_ERROR) {
-        std::string error = _get_last_error("Faild to get et client info.");
+        std::string error = _get_last_error("Faild to get client info.");
+
+        throw std::runtime_error(error.c_str());
+    }
+
+    auto hostname = (char*)calloc(HOST_NAME_MAX + 1, sizeof(char));
+    if(gethostname(hostname, HOST_NAME_MAX) == SOCKET_ERROR) {
+        std::string error = _get_last_error("Faild to get host name.");
 
         throw std::runtime_error(error.c_str());
     }
@@ -387,6 +394,8 @@ Socket::open()
     std::string client_ip = ::inet_ntoa(client_info.sin_addr);
 
     std::string body = "<p>client ip:" + client_ip +
+                       "</p>"
+                       "<p>host name:" + std::string(hostname) +
                        "</p>"
                        "<a href=''>refresh</a>"
                        "\r\n";
@@ -397,6 +406,7 @@ Socket::open()
                            "Content-Length: " + std::to_string(body.size()) + "\r\n\r\n" +
                            body.c_str();
 
+    ::free(hostname);
     ::send(client, response.c_str(), response.size(), 0);
     close_socket(client);
 }
