@@ -4,7 +4,8 @@
 #cmakedefine HTTPWEBSERVER_LIB_EXPORT_SHARED
 #cmakedefine HTTPWEBSERVER_LIB_EXPORT_STATIC
 #cmakedefine LINUX
-#cmakedefine LOSER
+#cmakedefine LOSE
+#cmakedefine BANANA
 
 #ifdef HTTPWEBSERVER_SOCKET_LIB_EXPORT /* inside DLL, export functons */
 #

@@ -58,10 +58,13 @@ if (${CMAKE_SYSTEM_NAME} MATCHES "Linux")
 endif ()
 
 if (WIN32)
-    # operating system for the spoiled and the losers
-    set (LOSER ON)
+    # Win (or LOSE)
+    set (LOSE ON)
 endif ()
-# no support for the weirdos using APPLE
+
+if (APPLE)
+    set (BANANA ON)
+endif()
 
 if (LINUX)
     check_include_file_cxx ("sys/socket.h" HAVE_SOCKET)
@@ -74,7 +77,7 @@ if (LINUX)
     endif ()
 endif ()
 
-if (LOSER)
+if (LOSE)
     check_include_file_cxx ("winsock2.h" HAVE_WINSOCK2)
     if (NOT HAVE_WINSOCK2)
         message (FATAL_ERROR "cannot find winsock2.h")
@@ -82,7 +85,7 @@ if (LOSER)
 endif ()
 
 
-if (LOSER)
+if (LOSE)
     if (MSVC)
         set (DLLTOOL OFF)
     else ()
@@ -192,7 +195,7 @@ if (${HTTPWEBSERVER_LIB_TYPE} STREQUAL "STATIC")
     add_definitions (-DHTTPWEBSERVER_SOCKET_LIB_EXPORT=1
                      )
 elseif (${HTTPWEBSERVER_LIB_TYPE} STREQUAL "SHARED")
-    if (LOSER)
+    if (LOSE)
         set (CMAKE_WINDOWS_EXPORT_ALL_SYMBOLS ON)
 
         if (MSVC)
@@ -239,7 +242,7 @@ target_compile_options (${BINARY_NAME} PRIVATE ${COMMON_COMPILE_OPTIONS}
 set_property (TARGET ${BINARY_NAME} PROPERTY CXX_STANDARD 14)
 
 set (COMMON_LINK_LIBRARIES "")
-if (LOSER)
+if (LOSE)
     list (APPEND COMMON_LINK_LIBRARIES "wsock32")
 endif ()
 target_link_libraries (${BINARY_NAME} ${COMMON_LINK_LIBRARIES})

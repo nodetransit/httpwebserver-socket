@@ -3,7 +3,7 @@
 
 #include "interfaces/socket.hpp"
 
-#ifdef LOSER
+#ifdef LOSE
 #   include <winsock2.h>
 #   include <ws2tcpip.h>
 #elif defined(LINUX)

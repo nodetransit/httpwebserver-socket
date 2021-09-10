@@ -10,14 +10,14 @@ namespace {
 const std::string
 _get_last_error()
 {
-#ifdef LOSER
+#ifdef LOSE
     int error = ::WSAGetLastError();
 #elif defined(LINUX)
     int error = errno;
 #endif
 
     switch (error) {
-#ifdef LOSER
+#ifdef LOSE
     case WSA_INVALID_HANDLE: return "Specified event object handle is invalid.";
     case WSA_NOT_ENOUGH_MEMORY: return "Insufficient memory available.";
     case WSA_INVALID_PARAMETER: return "One or more parameters are invalid.";
@@ -264,7 +264,7 @@ Socket::Socket() :
     socket(0),
     is_open(false)
 {
-#ifdef LOSER
+#ifdef LOSE
     int     ret;
     WSADATA wsaData;
 
@@ -284,7 +284,7 @@ Socket::~Socket() noexcept
         close();
     }
 
-#ifdef LOSER
+#ifdef LOSE
     if (::WSACleanup() == SOCKET_ERROR) {
         std::string error = _get_last_error("Failed to clean up.");
 
@@ -297,7 +297,7 @@ Socket::~Socket() noexcept
 void
 Socket::create_socket()
 {
-#ifdef LOSER
+#ifdef LOSE
     socket = ::socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
 #elif defined(LINUX)
     socket = ::socket(AF_INET, SOCK_STREAM, 0);
@@ -311,7 +311,7 @@ Socket::create_socket()
 
     static const int ONE = 1;
 
-#ifdef LOSER
+#ifdef LOSE
     int setopt_result = ::setsockopt(socket, SOL_SOCKET, SO_REUSEADDR, (char*)&ONE, sizeof(ONE));
 #elif defined(LINUX)
     int setopt_result = ::setsockopt(socket, SOL_SOCKET, SO_REUSEPORT, &ONE, sizeof(ONE));
@@ -372,7 +372,7 @@ Socket::open()
     sockaddr_in client_info     = {};
     int         client_info_len = sizeof(sockaddr_in);
 
-#ifdef LOSER
+#ifdef LOSE
     int getpeername_result = ::getpeername(client, (sockaddr*)(&client_info), &client_info_len);
 #elif defined(LINUX)
     int getpeername_result = ::getpeername(client, (sockaddr*)(&client_info), (socklen_t*)&client_info_len);
@@ -412,7 +412,7 @@ Socket::close()
 void
 Socket::close_socket(SOCKET s)
 {
-#ifdef LOSER
+#ifdef LOSE
     int shutdown_result = ::shutdown(s, SD_BOTH);
 #elif defined(LINUX)
     int shutdown_result = ::shutdown(s, SHUT_RDWR);
@@ -425,7 +425,7 @@ Socket::close_socket(SOCKET s)
         // throw std::runtime_error(error.c_str());
     }
 
-#ifdef LOSER
+#ifdef LOSE
     ::closesocket(s);
 #elif defined(LINUX)
     ::close(s);
