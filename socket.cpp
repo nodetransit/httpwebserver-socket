@@ -259,10 +259,11 @@ _get_last_error(const std::string& prefix)
 }
 
 Socket::Socket() :
-    port(0),
-    connection_count(0),
-    socket(0),
-    is_open(false)
+      port(0),
+      connection_count(0),
+      socket(0),
+      server_info(nullptr),
+      is_open(false)
 {
 #ifdef LOSE
     int     ret;
@@ -274,14 +275,18 @@ Socket::Socket() :
         throw std::runtime_error(error.c_str());
     }
 #endif
-
-    create_socket();
 }
 
 Socket::~Socket() noexcept
 {
     if (is_open) {
         close();
+    }
+
+    if(server_info != nullptr) {
+        freeaddrinfo(server_info);
+
+        server_info = nullptr;
     }
 
 #ifdef LOSE
@@ -295,30 +300,52 @@ Socket::~Socket() noexcept
 }
 
 void
-Socket::create_socket()
+Socket::get_addrinfo()
 {
-#ifdef LOSE
-    socket = ::socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
-#elif defined(LINUX)
-    socket = ::socket(AF_INET, SOCK_STREAM, 0);
-#endif
+    addrinfo hints = {0};
 
-    if (socket == INVALID_SOCKET) {
-        std::string error = _get_last_error("Failed to create socket.");
+    hints.ai_family   = AF_UNSPEC;
+    hints.ai_socktype = SOCK_STREAM;
+    hints.ai_protocol = IPPROTO_TCP;
+    hints.ai_flags    = AI_PASSIVE;
+
+    std::string service = std::to_string(port);
+
+    int result = 0;
+
+    if ((result = ::getaddrinfo("0.0.0.0", service.c_str(), &hints, &server_info)) != SOCKET_NOERROR) {
+        std::string error = _get_last_error("Failed to get information about the specified network service '" + service + "'.");
 
         throw std::runtime_error(error.c_str());
     }
+}
 
-    static const int ONE = 1;
+void
+Socket::create_socket()
+{
+    for (addrinfo* p = server_info; p != nullptr; p = p->ai_next, socket = INVALID_SOCKET) {
+        continue_if ((socket = ::socket(p->ai_family, p->ai_socktype, p->ai_protocol)) == INVALID_SOCKET);
+
+        static const int ONE = 1;
 
 #ifdef LOSE
-    int setopt_result = ::setsockopt(socket, SOL_SOCKET, SO_REUSEADDR, (char*)&ONE, sizeof(ONE));
+        int setopt_result = ::setsockopt(socket, SOL_SOCKET, SO_REUSEADDR, (char*)&ONE, sizeof(ONE));
 #elif defined(LINUX)
-    int setopt_result = ::setsockopt(socket, SOL_SOCKET, SO_REUSEPORT, &ONE, sizeof(ONE));
+        int setopt_result = ::setsockopt(socket, SOL_SOCKET, SO_REUSEPORT, &ONE, sizeof(ONE));
 #endif
 
-    if(setopt_result == SOCKET_ERROR) {
-        std::string error = _get_last_error("Failed to set socket option.");
+        break_if (setopt_result != SOCKET_ERROR && ::bind(socket, p->ai_addr, p->ai_addrlen) != SOCKET_ERROR);
+
+        close_socket(socket);
+    }
+
+
+    freeaddrinfo(server_info);
+
+    server_info = nullptr;
+
+    if (socket == INVALID_SOCKET) {
+        std::string error = _get_last_error("Failed to create socket.");
 
         throw std::runtime_error(error.c_str());
     }
@@ -331,17 +358,8 @@ Socket::bind(const unsigned short p)
 {
     port = p;
 
-    sockaddr_in server_address = {};
-
-    server_address.sin_family      = AF_INET;
-    server_address.sin_port        = ::htons(port);
-    server_address.sin_addr.s_addr = ::htonl(INADDR_ANY);
-
-    if (::bind(socket, (sockaddr*)&server_address, sizeof(server_address)) == SOCKET_ERROR) {
-        std::string error = _get_last_error("Failed to bind to port " + std::to_string(port) + ".");
-
-        throw std::runtime_error(error.c_str());
-    }
+    get_addrinfo();
+    create_socket();
 }
 
 void
@@ -358,10 +376,25 @@ Socket::listen(const unsigned int count, event_callback callback)
     }
 }
 
+namespace {
+void*
+get_in_addr(struct sockaddr* sa)
+{
+    if (sa->sa_family == AF_INET) {
+        return &(((struct sockaddr_in*)sa)->sin_addr);
+    }
+
+    return &(((struct sockaddr_in6*)sa)->sin6_addr);
+}
+}
+
 void
 Socket::open()
 {
-    SOCKET client = ::accept(socket, nullptr, nullptr);
+    sockaddr_storage client_addr;
+
+    socklen_t storage_size = sizeof(client_addr);
+    SOCKET    client       = ::accept(socket, (sockaddr*)&client_addr, &storage_size);
 
     if(client == INVALID_SOCKET) {
         std::string error = _get_last_error("Failed to accept from client.");
@@ -369,33 +402,19 @@ Socket::open()
         throw std::runtime_error(error.c_str());
     }
 
-    sockaddr_in client_info     = {};
-    int         client_info_len = sizeof(sockaddr_in);
-
-#ifdef LOSE
-    int getpeername_result = ::getpeername(client, (sockaddr*)(&client_info), &client_info_len);
-#elif defined(LINUX)
-    int getpeername_result = ::getpeername(client, (sockaddr*)(&client_info), (socklen_t*)&client_info_len);
-#endif
-
-    if (getpeername_result == SOCKET_ERROR) {
-        std::string error = _get_last_error("Faild to get client info.");
-
-        throw std::runtime_error(error.c_str());
-    }
+    char client_ip[INET6_ADDRSTRLEN];
+    ::inet_ntop(client_addr.ss_family, get_in_addr((sockaddr*)&client_addr), client_ip, sizeof(client_ip));
 
     auto hostname = (char*)calloc(HOST_NAME_MAX + 1, sizeof(char));
     if(gethostname(hostname, HOST_NAME_MAX) == SOCKET_ERROR) {
-        std::string error = _get_last_error("Faild to get host name.");
+        std::string error = _get_last_error("Failed to get host name.");
 
         throw std::runtime_error(error.c_str());
     }
 
-    std::string client_ip = ::inet_ntoa(client_info.sin_addr);
-
-    std::string body = "<p>client ip:" + client_ip +
+    std::string body = "<p>host ip: " + std::string(client_ip) +
                        "</p>"
-                       "<p>host name:" + std::string(hostname) +
+                       "<p>host name: " + std::string(hostname) +
                        "</p>"
                        "<a href=''>refresh</a>"
                        "\r\n";
@@ -424,6 +443,10 @@ Socket::close_socket(SOCKET s)
 {
 #ifdef LOSE
     int shutdown_result = ::shutdown(s, SD_BOTH);
+
+    if(shutdown_result == SOCKET_ERROR && ::WSAGetLastError() == WSAENOTCONN) {
+        shutdown_result = SOCKET_NOERROR;
+    }
 #elif defined(LINUX)
     int shutdown_result = ::shutdown(s, SHUT_RDWR);
 #endif

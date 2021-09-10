@@ -243,7 +243,7 @@ set_property (TARGET ${BINARY_NAME} PROPERTY CXX_STANDARD 14)
 
 set (COMMON_LINK_LIBRARIES "")
 if (LOSE)
-    list (APPEND COMMON_LINK_LIBRARIES "wsock32")
+    list (APPEND COMMON_LINK_LIBRARIES "wsock32" "Ws2_32")
 endif ()
 target_link_libraries (${BINARY_NAME} ${COMMON_LINK_LIBRARIES})
 

@@ -45,6 +45,10 @@ main(int, char**)
         std::cout << "dynamic cast failed" << std::endl;
 
         return EXIT_FAILURE;
+    } catch (std::exception& ex) {
+        std::cout << ex.what() << std::endl;
+
+        return EXIT_FAILURE;
     }
 
 }

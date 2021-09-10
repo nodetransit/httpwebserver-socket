@@ -13,6 +13,7 @@
 #   include <sys/socket.h>
 #   include <netinet/in.h>
 #   include <arpa/inet.h>
+#   include <netdb.h>
 #   include <unistd.h>
 #   include <errno.h>
 #   include <limits.h>
@@ -21,6 +22,12 @@
 #   define SOCKET_ERROR   -1
 #   define INVALID_SOCKET -1
 #endif
+
+#define SOCKET_NOERROR 0
+
+#define continue_if(c) if(c) { continue; }
+#define break_if(c) if(c) { break; }
+
 
 namespace nt { namespace http {
 
@@ -34,6 +41,7 @@ private:
     unsigned int connection_count;
 
     SOCKET socket;
+    addrinfo* server_info;
 
     bool is_open;
 
@@ -47,6 +55,7 @@ public:
     void close();
 
 private:
+    void get_addrinfo();
     void create_socket();
     void close_socket(SOCKET);
 };
