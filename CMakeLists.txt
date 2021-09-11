@@ -3,6 +3,11 @@ project (libhttpwebserver_socket
          VERSION 2.1.0
          DESCRIPTION "TCP/IP Socket Library")
 
+set (LIBRESSL_TESTS OFF)
+set (LIBRESSL_SKIP_INSTALL ON)
+add_subdirectory (./../libressl LibreSSL)
+
+#include (../libressl/FindLibreSSL.cmake)
 include (CheckIncludeFiles)
 include (CheckIncludeFileCXX)
 
@@ -105,6 +110,8 @@ if (LOSE)
     endif ()
 
 endif ()
+
+#find_package(LibreSSL REQUIRED)
 
 #---------------------------------------------------------------------
 
@@ -242,7 +249,7 @@ target_compile_options (${BINARY_NAME} PRIVATE ${COMMON_COMPILE_OPTIONS}
                         ${COMMON_DEBUG_COMPILE_OPTTIONS})
 set_property (TARGET ${BINARY_NAME} PROPERTY CXX_STANDARD 14)
 
-set (COMMON_LINK_LIBRARIES "")
+set (COMMON_LINK_LIBRARIES "tls")
 if (LOSE)
     list (APPEND COMMON_LINK_LIBRARIES "wsock32" "ws2_32")
 endif ()

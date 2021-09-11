@@ -4,12 +4,40 @@
 #include <exception>
 #include <typeinfo>
 
+#include <tls.h>
+
 #include "socket.hpp"
 
 static void
 callback(void*, void*)
 {
 
+}
+
+static void
+_tls()
+{
+    tls       * tls;
+    tls_config* tls_config;
+
+    if (tls_init() != 0) {
+        printf("tls_init() failed\n");
+        return;
+    }
+
+    if ((tls = tls_server()) == NULL) {
+        printf("tls_server() failed\n");
+        return;
+    }
+
+    if ((tls_config = tls_config_new()) == NULL) {
+        printf("tls_config_new() failed\n");
+        return;
+    }
+
+    tls_close(tls);
+    tls_free(tls);
+    tls_config_free(tls_config);
 }
 
 static void
@@ -39,6 +67,7 @@ int
 main(int, char**)
 {
     try {
+        _tls();
         _main();
         return EXIT_SUCCESS;
     } catch (std::bad_cast& ex) {
