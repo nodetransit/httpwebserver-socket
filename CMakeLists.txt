@@ -3,11 +3,12 @@ project (libhttpwebserver_socket
          VERSION 2.1.0
          DESCRIPTION "TCP/IP Socket Library")
 
-set (LIBRESSL_TESTS OFF)
-set (LIBRESSL_SKIP_INSTALL ON)
+set (BUILD_SHARED_LIBS ON CACHE INTERNAL "" FORCE)
+set (LIBRESSL_APPS OFF CACHE INTERNAL "" FORCE)
+set (LIBRESSL_TESTS OFF CACHE INTERNAL "" FORCE)
+set (LIBRESSL_SKIP_INSTALL ON CACHE INTERNAL "" FORCE)
 add_subdirectory (./../libressl LibreSSL)
 
-#include (../libressl/FindLibreSSL.cmake)
 include (CheckIncludeFiles)
 include (CheckIncludeFileCXX)
 
@@ -110,8 +111,6 @@ if (LOSE)
     endif ()
 
 endif ()
-
-#find_package(LibreSSL REQUIRED)
 
 #---------------------------------------------------------------------
 

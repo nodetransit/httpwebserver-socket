@@ -41,7 +41,6 @@ private:
     unsigned int connection_count;
 
     SOCKET socket;
-    addrinfo* server_info;
 
     bool is_open;
 
@@ -49,14 +48,14 @@ public:
     Socket();
     ~Socket() noexcept;
 
-    void bind(const unsigned short);
+    void bind(const char*, const unsigned short);
     void listen(const unsigned int, event_callback);
     void open();
     void close();
 
 private:
-    void get_addrinfo();
-    void create_socket();
+    addrinfo* get_addrinfo(const char*);
+    void create_socket(addrinfo*);
     void close_socket(SOCKET);
 };
 

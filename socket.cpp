@@ -3,6 +3,7 @@
 #include <iostream>
 #include <stdexcept>
 #include <string>
+#include <tls.h>
 
 using namespace nt::http;
 
@@ -256,15 +257,42 @@ _get_last_error(const std::string& prefix)
 {
     return prefix + " " + _get_last_error();
 }
+
+void
+_tls()
+{
+    tls       * tls;
+    tls_config* tls_config;
+
+    if (tls_init() != 0) {
+        printf("tls_init() failed\n");
+        return;
+    }
+
+    if ((tls = tls_server()) == nullptr) {
+        printf("tls_server() failed\n");
+        return;
+    }
+
+    if ((tls_config = tls_config_new()) == nullptr) {
+        printf("tls_config_new() failed\n");
+        return;
+    }
+
+    tls_close(tls);
+    tls_free(tls);
+    tls_config_free(tls_config);
+}
 }
 
 Socket::Socket() :
       port(0),
       connection_count(0),
       socket(0),
-      server_info(nullptr),
       is_open(false)
 {
+    _tls();
+
 #ifdef LOSE
     int     ret;
     WSADATA wsaData;
@@ -283,12 +311,6 @@ Socket::~Socket() noexcept
         close();
     }
 
-    if(server_info != nullptr) {
-        freeaddrinfo(server_info);
-
-        server_info = nullptr;
-    }
-
 #ifdef LOSE
     if (::WSACleanup() == SOCKET_ERROR) {
         std::string error = _get_last_error("Failed to clean up.");
@@ -299,9 +321,10 @@ Socket::~Socket() noexcept
 #endif
 }
 
-void
-Socket::get_addrinfo()
+addrinfo*
+Socket::get_addrinfo(const char* server_address)
 {
+    addrinfo* server_info;
     addrinfo hints = {0};
 
     hints.ai_family   = AF_UNSPEC;
@@ -313,32 +336,41 @@ Socket::get_addrinfo()
 
     int result = 0;
 
-    if ((result = ::getaddrinfo("0.0.0.0", service.c_str(), &hints, &server_info)) != SOCKET_NOERROR) {
+    if ((result = ::getaddrinfo(server_address, service.c_str(), &hints, &server_info)) != SOCKET_NOERROR) {
         std::string error = _get_last_error("Failed to get information about the specified network service '" + service + "'.");
 
         throw std::runtime_error(error.c_str());
     }
+
+    return server_info;
 }
 
 void
-Socket::create_socket()
+Socket::create_socket(addrinfo* server_info)
 {
-    for (addrinfo* p = server_info; p != nullptr; p = p->ai_next, socket = INVALID_SOCKET) {
+    int  bind_result = SOCKET_NOERROR;
+    socket = INVALID_SOCKET;
+
+    for (addrinfo* p = server_info; p != nullptr; p = p->ai_next) {
+        if (is_open) {
+            close_socket(socket);
+
+            is_open = false;
+        }
+
         continue_if ((socket = ::socket(p->ai_family, p->ai_socktype, p->ai_protocol)) == INVALID_SOCKET);
 
-        static const int ONE = 1;
-
 #ifdef LOSE
-        int setopt_result = ::setsockopt(socket, SOL_SOCKET, SO_REUSEADDR, (char*)&ONE, sizeof(ONE));
+        static const char ONE = '1';
 #elif defined(LINUX)
-        int setopt_result = ::setsockopt(socket, SOL_SOCKET, SO_REUSEPORT, &ONE, sizeof(ONE));
+        static const int ONE = 1;
 #endif
 
-        break_if (setopt_result != SOCKET_ERROR && ::bind(socket, p->ai_addr, p->ai_addrlen) != SOCKET_ERROR);
+        is_open = true;
 
-        close_socket(socket);
+        break_if (::setsockopt(socket, SOL_SOCKET, SO_REUSEADDR, &ONE, sizeof(ONE)) != SOCKET_ERROR &&
+                  (bind_result = ::bind(socket, p->ai_addr, p->ai_addrlen)) != SOCKET_ERROR);
     }
-
 
     freeaddrinfo(server_info);
 
@@ -350,16 +382,26 @@ Socket::create_socket()
         throw std::runtime_error(error.c_str());
     }
 
+    if(bind_result == SOCKET_ERROR) {
+        std::string error = _get_last_error("Failed to bind port.");
+
+        close_socket(socket);
+
+        is_open = false;
+
+        throw std::runtime_error(error.c_str());
+    }
+
     is_open = true;
 }
 
 void
-Socket::bind(const unsigned short p)
+Socket::bind(const char* server_address, const unsigned short port_no)
 {
-    port = p;
+    port = port_no;
 
-    get_addrinfo();
-    create_socket();
+    auto server_info = get_addrinfo(server_address);
+    create_socket(server_info);
 }
 
 void
@@ -465,9 +507,9 @@ Socket::open()
     }
 
     std::string body = "<p>host ip: " + std::string(client_ip) +
-                       "</p>"
+                       "</p>\n"
                        "<p>host name: " + std::string(hostname) +
-                       "</p>"
+                       "</p>\n"
                        "<a href=''>refresh</a>"
                        "\r\n";
 
@@ -501,6 +543,10 @@ Socket::close_socket(SOCKET s)
     }
 #elif defined(LINUX)
     int shutdown_result = ::shutdown(s, SHUT_RDWR);
+
+    if(shutdown_result == SOCKET_ERROR && errno == ENOTCONN) {
+        shutdown_result = SOCKET_NOERROR;
+    }
 #endif
 
     if(shutdown_result == SOCKET_ERROR) {
