@@ -41,7 +41,7 @@ public:
     Socket() = default;
     virtual ~Socket() noexcept = 0;
 
-    virtual void bind(const char*, const unsigned short) = 0;
+    virtual void bind(const char*, const char*) = 0;
     virtual void listen(const unsigned int, event_callback) = 0;
     virtual void open() = 0;
     virtual void close() = 0;

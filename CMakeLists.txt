@@ -8,6 +8,7 @@ set (LIBRESSL_APPS OFF CACHE INTERNAL "" FORCE)
 set (LIBRESSL_TESTS OFF CACHE INTERNAL "" FORCE)
 set (LIBRESSL_SKIP_INSTALL ON CACHE INTERNAL "" FORCE)
 add_subdirectory (./../libressl LibreSSL)
+add_subdirectory (./../httpwebserver_interface hws_interface)
 
 include (CheckIncludeFiles)
 include (CheckIncludeFileCXX)
@@ -115,7 +116,9 @@ endif ()
 #---------------------------------------------------------------------
 
 set (SOURCE_FILES "interfaces/socket.cpp"
-                  "socket.cpp")
+                  "socket.cpp"
+                  "tcp_socket.cpp"
+                  "udp_socket.cpp")
 if (LOSER)
     list (APPEND SOURCE_FILES "manifest.rc")
 endif ()
@@ -248,7 +251,8 @@ target_compile_options (${BINARY_NAME} PRIVATE ${COMMON_COMPILE_OPTIONS}
                         ${COMMON_DEBUG_COMPILE_OPTTIONS})
 set_property (TARGET ${BINARY_NAME} PROPERTY CXX_STANDARD 14)
 
-set (COMMON_LINK_LIBRARIES "tls")
+set (COMMON_LINK_LIBRARIES "tls"
+                           "httpwebserver_interface")
 if (LOSE)
     list (APPEND COMMON_LINK_LIBRARIES "wsock32" "ws2_32")
 endif ()
@@ -256,7 +260,10 @@ target_link_libraries (${BINARY_NAME} ${COMMON_LINK_LIBRARIES})
 
 target_include_directories(${BINARY_NAME}
                            PUBLIC "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>"
-                                  "$<INSTALL_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>")
+                                  "$<INSTALL_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>"
+                                  "./../httpwebserver_interface"
+                                  "./../libressl"
+                                  )
 
 #---------------------------------------------------------------------
 

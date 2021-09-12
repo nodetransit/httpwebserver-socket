@@ -5,6 +5,9 @@
 #include <string>
 #include <tls.h>
 
+#include <macros/leave_loop_if.hpp>
+#include <macros/scope_guard.hpp>
+
 using namespace nt::http;
 
 namespace {
@@ -286,9 +289,10 @@ _tls()
 }
 
 Socket::Socket() :
-      port(0),
+      port("0"),
       connection_count(0),
       socket(0),
+      protocol(0),
       is_open(false)
 {
     _tls();
@@ -329,20 +333,35 @@ Socket::get_addrinfo(const char* server_address)
 
     hints.ai_family   = AF_UNSPEC;
     hints.ai_socktype = SOCK_STREAM;
-    hints.ai_protocol = IPPROTO_TCP;
+    hints.ai_protocol = protocol; // 0 = ANY
     hints.ai_flags    = AI_PASSIVE;
-
-    std::string service = std::to_string(port);
 
     int result = 0;
 
-    if ((result = ::getaddrinfo(server_address, service.c_str(), &hints, &server_info)) != SOCKET_NOERROR) {
-        std::string error = _get_last_error("Failed to get information about the specified network service '" + service + "'.");
+    if ((result = ::getaddrinfo(server_address, port.c_str(), &hints, &server_info)) != SOCKET_NOERROR) {
+        std::string error = _get_last_error("Failed to get information about the specified network port/service '" + port + "'.");
 
         throw std::runtime_error(error.c_str());
     }
 
+
     return server_info;
+}
+
+static int
+get_bound_port(SOCKET socket)
+{
+    sockaddr_in sin;
+
+    int addrlen = sizeof(sin);
+
+    if(::getsockname(socket, (sockaddr*)&sin, &addrlen) != SOCKET_NOERROR) {
+        std::string error = _get_last_error("Unable to get bound port.");
+
+        throw std::runtime_error(error.c_str());
+    }
+
+    return ntohs(sin.sin_port);
 }
 
 void
@@ -368,11 +387,9 @@ Socket::create_socket(addrinfo* server_info)
 
         is_open = true;
 
-        break_if (::setsockopt(socket, SOL_SOCKET, SO_REUSEADDR, &ONE, sizeof(ONE)) != SOCKET_ERROR &&
+        break_if (//::setsockopt(socket, SOL_SOCKET, SO_REUSEADDR, &ONE, sizeof(ONE)) != SOCKET_ERROR &&
                   (bind_result = ::bind(socket, p->ai_addr, p->ai_addrlen)) != SOCKET_ERROR);
     }
-
-    freeaddrinfo(server_info);
 
     server_info = nullptr;
 
@@ -383,7 +400,7 @@ Socket::create_socket(addrinfo* server_info)
     }
 
     if(bind_result == SOCKET_ERROR) {
-        std::string error = _get_last_error("Failed to bind port.");
+        std::string error = _get_last_error("Failed to bind port/service " + port + ".");
 
         close_socket(socket);
 
@@ -392,16 +409,33 @@ Socket::create_socket(addrinfo* server_info)
         throw std::runtime_error(error.c_str());
     }
 
+    std::cout << "listening to port " << get_bound_port(socket) << std::endl;
+
     is_open = true;
+}
+
+void
+Socket::bind(const char* server_address, const char* service)
+{
+    addrinfo* server_info = nullptr;
+
+    ______________________________________________________________
+        if(server_info != nullptr) {
+            freeaddrinfo(server_info);
+        }
+    _____________________________________________________________;
+
+    port = service;
+
+    server_info = get_addrinfo(server_address);
+
+    create_socket(server_info);
 }
 
 void
 Socket::bind(const char* server_address, const unsigned short port_no)
 {
-    port = port_no;
-
-    auto server_info = get_addrinfo(server_address);
-    create_socket(server_info);
+    bind(server_address, std::to_string(port_no).c_str());
 }
 
 void
@@ -412,7 +446,7 @@ Socket::listen(const unsigned int count, event_callback callback)
     int listen_result = ::listen(socket, connection_count);
 
     if(listen_result == SOCKET_ERROR) {
-        std::string error = _get_last_error("Failed to listen to port " + std::to_string(port) + ".");
+        std::string error = _get_last_error("Failed to listen to port/service " + port + ".");
 
         throw std::runtime_error(error.c_str());
     }

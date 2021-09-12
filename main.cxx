@@ -4,7 +4,7 @@
 #include <exception>
 #include <typeinfo>
 
-#include "socket.hpp"
+#include "tcp_socket.hpp"
 
 static void
 callback(void*, void*)
@@ -15,7 +15,8 @@ callback(void*, void*)
 static void
 run(nt::http::interfaces::Socket* socket)
 {
-    socket->bind("0.0.0.0", 80);
+    // socket->bind("0.0.0.0", "tcp"); // error
+    socket->bind("0.0.0.0", "http");
     socket->listen(8, callback);
     socket->open();
     // socket->close();
@@ -24,7 +25,7 @@ run(nt::http::interfaces::Socket* socket)
 static void
 _main()
 {
-    auto socket = std::make_unique<nt::http::Socket>();
+    auto socket = std::make_unique<nt::http::TcpSocket>();
     auto s      = dynamic_cast<nt::http::interfaces::Socket*>(socket.get());
 
     if (s == nullptr) {

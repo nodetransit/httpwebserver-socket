@@ -2,6 +2,7 @@
 #define HTTPWEBSERVER_SOCKET_HPP__
 
 #include "interfaces/socket.hpp"
+#include <string>
 
 #ifdef LOSE
 #   include <winsock2.h>
@@ -25,9 +26,6 @@
 
 #define SOCKET_NOERROR 0
 
-#define continue_if(c) if(c) { continue; }
-#define break_if(c) if(c) { break; }
-
 
 namespace nt { namespace http {
 
@@ -37,17 +35,21 @@ class __HttpWebServerSocketPort__ Socket :
       public nt::http::interfaces::Socket
 {
 private:
-    unsigned short port;
+    std::string port;
     unsigned int connection_count;
 
     SOCKET socket;
 
     bool is_open;
 
+protected:
+    int protocol;
+
 public:
     Socket();
     ~Socket() noexcept;
 
+    void bind(const char*, const char*);
     void bind(const char*, const unsigned short);
     void listen(const unsigned int, event_callback);
     void open();
