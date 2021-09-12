@@ -292,8 +292,8 @@ Socket::Socket() :
       port("0"),
       connection_count(0),
       socket(0),
-      protocol(0),
-      is_open(false)
+      is_open(false),
+      protocol(0)
 {
     _tls();
 
@@ -353,7 +353,7 @@ get_bound_port(SOCKET socket)
 {
     sockaddr_in sin;
 
-    int addrlen = sizeof(sin);
+    socklen_t addrlen = (socklen_t)sizeof(sin);
 
     if(::getsockname(socket, (sockaddr*)&sin, &addrlen) != SOCKET_NOERROR) {
         std::string error = _get_last_error("Unable to get bound port.");
@@ -381,13 +381,15 @@ Socket::create_socket(addrinfo* server_info)
 
 #ifdef LOSE
         static const char ONE = '1';
+        int REUSE_PORT_ADDR = SO_REUSEADDR;
 #elif defined(LINUX)
         static const int ONE = 1;
+        int REUSE_PORT_ADDR = SO_REUSEPORT;
 #endif
 
         is_open = true;
 
-        break_if (//::setsockopt(socket, SOL_SOCKET, SO_REUSEADDR, &ONE, sizeof(ONE)) != SOCKET_ERROR &&
+        break_if (::setsockopt(socket, SOL_SOCKET, REUSE_PORT_ADDR, &ONE, sizeof(ONE)) != SOCKET_ERROR &&
                   (bind_result = ::bind(socket, p->ai_addr, p->ai_addrlen)) != SOCKET_ERROR);
     }
 
