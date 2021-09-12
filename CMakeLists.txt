@@ -251,18 +251,16 @@ target_compile_options (${BINARY_NAME} PRIVATE ${COMMON_COMPILE_OPTIONS}
                         ${COMMON_DEBUG_COMPILE_OPTTIONS})
 set_property (TARGET ${BINARY_NAME} PROPERTY CXX_STANDARD 14)
 
-set (COMMON_LINK_LIBRARIES "tls"
-                           "httpwebserver_interface")
+set (COMMON_LINK_LIBRARIES "httpwebserver_interface")
 if (LOSE)
     list (APPEND COMMON_LINK_LIBRARIES "wsock32" "ws2_32")
 endif ()
-target_link_libraries (${BINARY_NAME} ${COMMON_LINK_LIBRARIES})
+target_link_libraries (${BINARY_NAME} "tls"
+                                       ${COMMON_LINK_LIBRARIES})
 
 target_include_directories(${BINARY_NAME}
                            PUBLIC "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>"
                                   "$<INSTALL_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>"
-                                  "./../httpwebserver_interface"
-                                  "./../libressl"
                                   )
 
 #---------------------------------------------------------------------
@@ -270,4 +268,4 @@ target_include_directories(${BINARY_NAME}
 add_executable ("hws_socket" "main.cxx")
 target_include_directories ("hws_socket" PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}")
 target_link_libraries ("hws_socket" ${BINARY_NAME}
-                                      )
+                                    "httpwebserver_interface")
