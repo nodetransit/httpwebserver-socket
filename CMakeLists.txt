@@ -119,7 +119,7 @@ set (SOURCE_FILES "interfaces/socket.cpp"
                   "socket.cpp"
                   "tcp_socket.cpp"
                   "udp_socket.cpp")
-if (LOSER)
+if (LOSE)
     list (APPEND SOURCE_FILES "manifest.rc")
 endif ()
 
@@ -134,7 +134,7 @@ set (BINARY_NAME "httpwebserver_socket")
 add_library (${BINARY_NAME} ${HTTPWEBSERVER_LIB_TYPE} ${SOURCE_FILES})
 
 configure_file ("${CMAKE_CURRENT_SOURCE_DIR}/interfaces/socket.hpp.in" "${CMAKE_CURRENT_SOURCE_DIR}/interfaces/socket.hpp")
-if (LOSER)
+if (LOSE)
     configure_file ("${CMAKE_CURRENT_SOURCE_DIR}/manifest.rc.in" "${CMAKE_CURRENT_SOURCE_DIR}/manifest.rc")
 endif ()
 
