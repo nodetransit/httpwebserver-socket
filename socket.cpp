@@ -566,14 +566,17 @@ Socket::handle_connection()
         throw std::runtime_error(error.c_str());
     }
 
-    // FD_SET(client, &read_list);
+    FD_SET(client, &read_list);
     connections.push_back(client);
 
     {
         std::string  client_ip   = get_in_ip((sockaddr*)&client_addr);
         unsigned int client_port = get_in_port((sockaddr*)&client_addr);
 
-        std::cout << "new connection from " << client_ip << ":" << client_port << std::endl;
+        std::cout << "[" << server_socket << "] has "
+                  << "new connection from " << client_ip << ":" << client_port
+                  << " [" << client << "]"
+                  << std::endl;
     }
 }
 
@@ -584,9 +587,10 @@ Socket::receive_data(SOCKET connection)
     std::string request;
 
     repeat {
-        char buffer[MAX_INPUT];
+        char buffer[MAX_INPUT] = {0};
+        const static int flags = 0; //MSG_DONTWAIT;
 
-        if ((bytes_rx = ::recv(connection, buffer, sizeof(buffer), 0)) == SOCKET_ERROR) {
+        if ((bytes_rx = ::recv(connection, buffer, sizeof(buffer) - 1, flags)) == SOCKET_ERROR) {
             std::string error = _get_last_error("Failed to receive data.");
 
             // todo: do not throw, just close the socket or what not
@@ -595,6 +599,19 @@ Socket::receive_data(SOCKET connection)
         }
 
         request += std::string(buffer);
+
+        if (request.size() >= 4) {
+            // signifies the end of the headers
+            // if there is post data, one needs to check the
+            // Content-Length
+            std::string end = request.substr(request.size() - 4, 4);
+            bool is_end = end == "\r\n\r\n";
+
+            if(is_end) {
+                // FD_CLR(connection, &read_list);
+                break;
+            }
+        }
     }
     until(bytes_rx == 0);
 
@@ -602,7 +619,9 @@ Socket::receive_data(SOCKET connection)
         request = "(nothing)";
     }
 
-    std::cout << "received : " << request << std::endl;
+    std::cout << "received from [" << connection << "]\n"
+              << request
+              << std::endl;
 }
 
 void
@@ -646,6 +665,10 @@ Socket::write_data(SOCKET connection)
     ::send(connection, response.c_str(), response.size(), 0);
     // close_socket(connection);
     // FD_CLR(connection, &read_list);
+    
+    std::cout << "writing response"
+              << "to [" << connection << "]"
+              << std::endl;
 }
 
 void
@@ -720,9 +743,11 @@ Socket::open()
         }
 
         for (auto& connection : connections) {
-            continue_if (connection.socket == INVALID_SOCKET);
+            continue_if (connection.socket == INVALID_SOCKET
+                        // || connection.socket == server_socket
+                            );
 
-            if(FD_ISSET(connection.socket, &read_list)) {
+            if(connection.socket != server_socket && FD_ISSET(connection.socket, &read_list)) {
                 receive_data(connection.socket);
                 // close_socket(connection.socket);
                 // connection.socket = INVALID_SOCKET;
