@@ -3,13 +3,6 @@ project (libhttpwebserver_socket
          VERSION 0.1.0
          DESCRIPTION "TCP/IP Socket Library")
 
-set (BUILD_SHARED_LIBS ON CACHE INTERNAL "" FORCE)
-set (LIBRESSL_APPS OFF CACHE INTERNAL "" FORCE)
-set (LIBRESSL_TESTS OFF CACHE INTERNAL "" FORCE)
-set (LIBRESSL_SKIP_INSTALL ON CACHE INTERNAL "" FORCE)
-add_subdirectory (./../libressl LibreSSL)
-add_subdirectory (./../httpwebserver_interface hws_interface)
-
 include (CheckIncludeFiles)
 include (CheckIncludeFileCXX)
 
@@ -265,7 +258,3 @@ target_include_directories(${BINARY_NAME}
 
 #---------------------------------------------------------------------
 
-add_executable ("hws_socket" "main.cxx")
-target_include_directories ("hws_socket" PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}")
-target_link_libraries ("hws_socket" ${BINARY_NAME}
-                                    "httpwebserver_interface")

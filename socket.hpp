@@ -36,9 +36,11 @@ class __HttpWebServerSocketPort__ Socket :
 {
 private:
     std::string port;
-    unsigned int connection_count;
+    unsigned int queue_count;
 
     SOCKET socket;
+    SOCKET last_socket;
+    fd_set socket_list;
 
     bool is_open;
 
@@ -59,6 +61,8 @@ private:
     addrinfo* get_addrinfo(const char*);
     void create_socket(addrinfo*);
     void close_socket(SOCKET);
+    void handle_connection(SOCKET);
+    void receive_data(SOCKET);
 };
 
 }}
