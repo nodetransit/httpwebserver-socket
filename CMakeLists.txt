@@ -253,6 +253,7 @@ if (LOSE)
     list (APPEND COMMON_LINK_LIBRARIES "wsock32" "ws2_32")
 endif ()
 target_link_libraries (${BINARY_NAME} "tls"
+                                      "tthreadpp"
                                        ${COMMON_LINK_LIBRARIES})
 
 target_include_directories(${BINARY_NAME}

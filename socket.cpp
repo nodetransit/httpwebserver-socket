@@ -5,6 +5,7 @@
 #include <string>
 #include <memory>
 #include <algorithm>
+#include <tinythread.h>
 #include <tls.h>
 
 #include <macros/leave_loop_if.hpp>
@@ -14,6 +15,91 @@
 using namespace nt::http;
 
 namespace {
+#ifdef __MINGW32__
+int
+inet_pton(int af, const char* src, void* dst)
+{
+    sockaddr_storage ss;
+    int  size = sizeof(ss);
+    char src_copy[INET6_ADDRSTRLEN + 1];
+
+    ::ZeroMemory(&ss, sizeof(ss));
+    /* stupid non-const API */
+    strncpy(src_copy, src, INET6_ADDRSTRLEN + 1);
+    src_copy[INET6_ADDRSTRLEN] = 0;
+
+    if (::WSAStringToAddress(src_copy, af, NULL, (sockaddr*)&ss, &size) == 0) {
+        switch (af) {
+        case AF_INET:
+            *(in_addr*)dst = ((sockaddr_in*)&ss)->sin_addr;
+            return 1;
+        case AF_INET6:
+            *(in6_addr*)dst = ((sockaddr_in6*)&ss)->sin6_addr;
+            return 1;
+        }
+    }
+
+    return 0;
+}
+
+const char*
+inet_ntop(int af, const void* src, char* dst, socklen_t size)
+{
+    sockaddr_storage ss;
+    unsigned long s = size;
+
+    ::ZeroMemory(&ss, sizeof(ss));
+    ss.ss_family = af;
+
+    switch (af) {
+    case AF_INET:
+        ((sockaddr_in*)&ss)->sin_addr = *(in_addr*)src;
+        break;
+    case AF_INET6:
+        ((sockaddr_in6*)&ss)->sin6_addr = *(in6_addr*)src;
+        break;
+    default:
+        return NULL;
+    }
+
+    /* cannot direclty use &size because of strict aliasing rules */
+    return
+        (::WSAAddressToString((sockaddr*)&ss, sizeof(ss), NULL, dst, &s) == 0) ?
+        dst :
+        NULL;
+}
+#endif
+
+void*
+get_in_addr(sockaddr* sa)
+{
+    if (sa->sa_family == AF_INET) {
+        return &(((sockaddr_in*)sa)->sin_addr);
+    }
+
+    return &(((sockaddr_in6*)sa)->sin6_addr);
+}
+
+std::string
+get_in_ip(sockaddr* sa)
+{
+    char client_ip[INET6_ADDRSTRLEN];
+
+    inet_ntop(sa->sa_family, get_in_addr(sa), client_ip, sizeof(client_ip));
+
+    return client_ip;
+}
+
+unsigned int
+get_in_port(sockaddr* sa)
+{
+    if (sa->sa_family == AF_INET) {
+        return ::ntohs(((sockaddr_in*)sa)->sin_port);
+    }
+
+    return ::ntohs(((sockaddr_in6*)sa)->sin6_port);
+}
+
 const std::string
 _get_last_error()
 {
@@ -465,90 +551,6 @@ Socket::listen(const unsigned int count, event_callback callback)
     connections.push_back(server_socket);
 }
 
-namespace {
-void*
-get_in_addr(sockaddr* sa)
-{
-    if (sa->sa_family == AF_INET) {
-        return &(((sockaddr_in*)sa)->sin_addr);
-    }
-
-    return &(((sockaddr_in6*)sa)->sin6_addr);
-}
-
-std::string
-get_in_ip(sockaddr* sa)
-{
-    char client_ip[INET6_ADDRSTRLEN];
-
-    ::inet_ntop(sa->sa_family, get_in_addr(sa), client_ip, sizeof(client_ip));
-
-    return client_ip;
-}
-
-unsigned int
-get_in_port(sockaddr* sa)
-{
-    if (sa->sa_family == AF_INET) {
-        return ::ntohs(((sockaddr_in*)sa)->sin_port);
-    }
-
-    return ::ntohs(((sockaddr_in6*)sa)->sin6_port);
-}
-
-#ifdef __MINGW32__
-int
-inet_pton(int af, const char* src, void* dst)
-{
-    sockaddr_storage ss;
-    int  size = sizeof(ss);
-    char src_copy[INET6_ADDRSTRLEN + 1];
-
-    ::ZeroMemory(&ss, sizeof(ss));
-    /* stupid non-const API */
-    strncpy(src_copy, src, INET6_ADDRSTRLEN + 1);
-    src_copy[INET6_ADDRSTRLEN] = 0;
-
-    if (::WSAStringToAddress(src_copy, af, NULL, (sockaddr*)&ss, &size) == 0) {
-        switch (af) {
-        case AF_INET:
-            *(in_addr*)dst = ((sockaddr_in*)&ss)->sin_addr;
-            return 1;
-        case AF_INET6:
-            *(in6_addr*)dst = ((sockaddr_in6*)&ss)->sin6_addr;
-            return 1;
-        }
-    }
-
-    return 0;
-}
-
-const char*
-inet_ntop(int af, const void* src, char* dst, socklen_t size)
-{
-    sockaddr_storage ss;
-    unsigned long s = size;
-
-    ::ZeroMemory(&ss, sizeof(ss));
-    ss.ss_family = af;
-
-    switch (af) {
-    case AF_INET:
-        ((sockaddr_in*)&ss)->sin_addr = *(in_addr*)src;
-        break;
-    case AF_INET6:
-        ((sockaddr_in6*)&ss)->sin6_addr = *(in6_addr*)src;
-        break;
-    default:
-        return NULL;
-    }
-
-    /* cannot direclty use &size because of strict aliasing rules */
-    return (::WSAAddressToString((sockaddr*)&ss, sizeof(ss), NULL, dst, &s) == 0) ? dst : NULL;
-}
-#endif
-}
-
 void
 Socket::handle_connection()
 {
@@ -601,45 +603,49 @@ Socket::receive_data(SOCKET connection)
     }
 
     std::cout << "received : " << request << std::endl;
+}
 
-    {
-        // sockaddr_storage client_addr;
-        //
-        // socklen_t storage_size = sizeof(client_addr);
-        //
-        // ::getpeername(connection, (sockaddr*)&client_addr, &storage_size);
-        //
-        // std::string  client_ip   = get_in_ip((sockaddr*)&client_addr);
-        // unsigned int client_port = get_in_port((sockaddr*)&client_addr);
-        //
-        // auto hostname = (char*)calloc(HOST_NAME_MAX + 1, sizeof(char));
-        // if (::gethostname(hostname, HOST_NAME_MAX) == SOCKET_ERROR) {
-        //     std::string error = _get_last_error("Failed to get host name.");
-        //
-        //     // todo: do not throw, just close the socket or what not
-        //     throw std::runtime_error(error.c_str());
-        // }
-        //
-        // std::string body = "<p>host ip: " + std::string(client_ip) + ":" + std::to_string(client_port) +
-        //                    "</p>\n"
-        //                    "<p>host name: " + std::string(hostname) +
-        //                    "</p>\n"
-        //                    "<p>request</p>\n"
-        //                    "<pre>" + request + "</pre>\n"
-        //                                        "<a href=''>refresh</a>"
-        //                                        "\r\n";
-        //
-        // std::string response = "HTTP/1.1 200 OK\r\n"
-        //                        "Content-Type: text/html; charset=UTF-8\r\n"
-        //                        "Connection: keep-alive\r\n"
-        //                        "Content-Length: " + std::to_string(body.size()) + "\r\n\r\n" +
-        //                        body.c_str();
-        //
-        // ::free(hostname);
-        // ::send(connection, response.c_str(), response.size(), 0);
-        // close_socket(connection);
-        // FD_CLR(connection, &read_list);
+void
+Socket::write_data(SOCKET connection)
+{
+    sockaddr_storage client_addr;
+
+    socklen_t storage_size = sizeof(client_addr);
+
+    ::getpeername(connection, (sockaddr*)&client_addr, &storage_size);
+
+    std::string  client_ip   = get_in_ip((sockaddr*)&client_addr);
+    unsigned int client_port = get_in_port((sockaddr*)&client_addr);
+
+    auto hostname = (char*)calloc(HOST_NAME_MAX + 1, sizeof(char));
+    if (::gethostname(hostname, HOST_NAME_MAX) == SOCKET_ERROR) {
+        std::string error = _get_last_error("Failed to get host name.");
+
+        // todo: do not throw, just close the socket or what not
+        throw std::runtime_error(error.c_str());
     }
+
+    // tthread::this_thread::sleep_for(tthread::chrono::milliseconds(5000));
+
+    std::string body = "<p>host ip: " + std::string(client_ip) + ":" + std::to_string(client_port) +
+                       "</p>\n"
+                       "<p>host name: " + std::string(hostname) +
+                       "</p>\n"
+                       "<p>request</p>\n"
+                       // "<pre>" + request + "</pre>\n"
+                       //                     "<a href=''>refresh</a>"
+                       "\r\n";
+
+    std::string response = "HTTP/1.1 200 OK\r\n"
+                           "Content-Type: text/html; charset=UTF-8\r\n"
+                           "Connection: keep-alive\r\n"
+                           "Content-Length: " + std::to_string(body.size()) + "\r\n\r\n" +
+                           body.c_str();
+
+    ::free(hostname);
+    ::send(connection, response.c_str(), response.size(), 0);
+    // close_socket(connection);
+    // FD_CLR(connection, &read_list);
 }
 
 void
@@ -650,11 +656,17 @@ Socket::reset_socket_lists()
     // FD_ZERO(&error_list);
 
     auto closed = [](const Connection& c){
-        return c.socket == -1;
+        return c.socket == INVALID_SOCKET;
     };
-    connections.erase(std::remove_if(connections.begin(), connections.end(), closed), connections.end());
+
+    connections.erase(std::remove_if(connections.begin(),
+                                     connections.end(),
+                                     closed),
+                      connections.end());
 
     for (auto &connection: connections) {
+        // continue_if(connection.socket == INVALID_SOCKET);
+
         FD_SET(connection.socket, &read_list);
         FD_SET(connection.socket, &write_list);
         // FD_SET(connection->socket, &error_list);
@@ -688,6 +700,8 @@ Socket::open()
 
         int select_result;
 
+        std::cout << "selecting from " << connections.size() << " connection(s)\n";
+
         if ((select_result = ::select(last_socket + 1, &read_list, &write_list, nullptr, timeout)) == SOCKET_ERROR) {
             std::string error = _get_last_error("Failed to poll connections.");
 
@@ -698,8 +712,6 @@ Socket::open()
             continue;
         }
 
-        std::cout << "select";
-
         if(FD_ISSET(server_socket, &read_list)) {
             if (ceiling < max_connections) {
                 handle_connection();
@@ -708,20 +720,20 @@ Socket::open()
         }
 
         for (auto& connection : connections) {
-            if(connection.socket != -1 && FD_ISSET(connection.socket, &read_list)) {
-                std::cout << "read " << connection.socket << "\n";
+            continue_if (connection.socket == INVALID_SOCKET);
+
+            if(FD_ISSET(connection.socket, &read_list)) {
                 receive_data(connection.socket);
-                close_socket(connection.socket);
-                connection.socket = -1;
-                ceiling--;
+                // close_socket(connection.socket);
+                // connection.socket = INVALID_SOCKET;
+                // ceiling--;
             }
 
-            if(connection.socket != -1 && FD_ISSET(connection.socket, &write_list)) {
-                std::cout << "write " << connection.socket << "\n";
-                char resp[] = "test";
-                ::send(connection.socket, resp, sizeof(resp), 0);
+            if(FD_ISSET(connection.socket, &write_list)) {
+                write_data(connection.socket);
                 close_socket(connection.socket);
-                connection.socket = -1;
+                connection.socket = INVALID_SOCKET;
+                ceiling--;
             }
         }
 

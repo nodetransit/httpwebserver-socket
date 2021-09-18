@@ -51,6 +51,7 @@ private:
     unsigned int get_last_socket();
     void handle_connection();
     void receive_data(SOCKET);
+    void write_data(SOCKET);
 };
 
 }}

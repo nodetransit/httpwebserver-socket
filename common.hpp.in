@@ -29,6 +29,10 @@
 #   define INVALID_SOCKET -1
 #endif
 
+#ifndef MAX_INPUT
+#   define MAX_INPUT 256
+#endif
+
 #define SOCKET_NOERROR 0
 
 #endif /* HTTPWEBSERVER_SOCKET_COMMON_HPP__ */
