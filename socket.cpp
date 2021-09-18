@@ -3,6 +3,8 @@
 #include <iostream>
 #include <stdexcept>
 #include <string>
+#include <memory>
+#include <algorithm>
 #include <tls.h>
 
 #include <macros/leave_loop_if.hpp>
@@ -292,12 +294,15 @@ _tls()
 Socket::Socket() :
       port("0"),
       queue_count(0),
-      socket(0),
-      last_socket(0),
+      max_connections(FD_SETSIZE - 1),
+      server_socket(0),
       is_open(false),
       protocol(0)
 {
     _tls();
+
+    connections.reserve(max_connections);
+    // connections = std::vector<Connection*>(max_connections, new Connection());
 
 #ifdef LOSE
     int     ret;
@@ -370,16 +375,16 @@ void
 Socket::create_socket(addrinfo* server_info)
 {
     int  bind_result = SOCKET_NOERROR;
-    socket = INVALID_SOCKET;
+    server_socket = INVALID_SOCKET;
 
     for (addrinfo* p = server_info; p != nullptr; p = p->ai_next) {
         if (is_open) {
-            close_socket(socket);
+            close_socket(server_socket);
 
             is_open = false;
         }
 
-        continue_if ((socket = ::socket(p->ai_family, p->ai_socktype, p->ai_protocol)) == INVALID_SOCKET);
+        continue_if ((server_socket = ::socket(p->ai_family, p->ai_socktype, p->ai_protocol)) == INVALID_SOCKET);
 
 #ifdef LOSE
         static const char ONE = '1';
@@ -391,13 +396,13 @@ Socket::create_socket(addrinfo* server_info)
 
         is_open = true;
 
-        break_if (::setsockopt(socket, SOL_SOCKET, REUSE_PORT_ADDR, &ONE, sizeof(ONE)) != SOCKET_ERROR &&
-                  (bind_result = ::bind(socket, p->ai_addr, p->ai_addrlen)) != SOCKET_ERROR);
+        break_if (::setsockopt(server_socket, SOL_SOCKET, REUSE_PORT_ADDR, &ONE, sizeof(ONE)) != SOCKET_ERROR &&
+                  (bind_result = ::bind(server_socket, p->ai_addr, p->ai_addrlen)) != SOCKET_ERROR);
     }
 
     server_info = nullptr;
 
-    if (socket == INVALID_SOCKET) {
+    if (server_socket == INVALID_SOCKET) {
         std::string error = _get_last_error("Failed to create socket.");
 
         throw std::runtime_error(error.c_str());
@@ -406,14 +411,14 @@ Socket::create_socket(addrinfo* server_info)
     if(bind_result == SOCKET_ERROR) {
         std::string error = _get_last_error("Failed to bind port/service " + port + ".");
 
-        close_socket(socket);
+        close_socket(server_socket);
 
         is_open = false;
 
         throw std::runtime_error(error.c_str());
     }
 
-    std::cout << "listening to port " << get_bound_port(socket) << std::endl;
+    std::cout << "listening to port " << get_bound_port(server_socket) << std::endl;
 
     is_open = true;
 }
@@ -447,20 +452,17 @@ Socket::listen(const unsigned int count, event_callback callback)
 {
     queue_count = count;
 
-    int listen_result = ::listen(socket, queue_count);
+    int listen_result = ::listen(server_socket, queue_count);
 
     if(listen_result == SOCKET_ERROR) {
         std::string error = _get_last_error("Failed to listen to port/service " + port + ".");
 
-        close_socket(socket);
+        close_socket(server_socket);
 
         throw std::runtime_error(error.c_str());
     }
 
-    FD_ZERO(&socket_list);
-    FD_SET(socket, &socket_list);
-
-    last_socket = socket;
+    connections.push_back(server_socket);
 }
 
 namespace {
@@ -548,12 +550,12 @@ inet_ntop(int af, const void* src, char* dst, socklen_t size)
 }
 
 void
-Socket::handle_connection(SOCKET connection)
+Socket::handle_connection()
 {
     sockaddr_storage client_addr;
 
     socklen_t storage_size = sizeof(client_addr);
-    SOCKET client          = ::accept(socket, (sockaddr*)&client_addr, &storage_size);
+    SOCKET client          = ::accept(server_socket, (sockaddr*)&client_addr, &storage_size);
 
     if (client == INVALID_SOCKET) {
         std::string error = _get_last_error("Failed to accept from client.");
@@ -562,11 +564,8 @@ Socket::handle_connection(SOCKET connection)
         throw std::runtime_error(error.c_str());
     }
 
-    FD_SET(client, &socket_list);
-
-    if (client > last_socket) {
-        last_socket = client;
-    }
+    // FD_SET(client, &read_list);
+    connections.push_back(client);
 
     {
         std::string  client_ip   = get_in_ip((sockaddr*)&client_addr);
@@ -589,91 +588,140 @@ Socket::receive_data(SOCKET connection)
             std::string error = _get_last_error("Failed to receive data.");
 
             // todo: do not throw, just close the socket or what not
-            throw std::runtime_error(error.c_str());
+            // throw std::runtime_error(error.c_str());
+            break;
         }
 
         request += std::string(buffer);
     }
     until(bytes_rx == 0);
 
-    {
-        sockaddr_storage client_addr;
-
-        socklen_t storage_size = sizeof(client_addr);
-
-        ::getpeername(connection, (sockaddr*)&client_addr, &storage_size);
-
-        std::string  client_ip   = get_in_ip((sockaddr*)&client_addr);
-        unsigned int client_port = get_in_port((sockaddr*)&client_addr);
-
-        auto hostname = (char*)calloc(HOST_NAME_MAX + 1, sizeof(char));
-        if (::gethostname(hostname, HOST_NAME_MAX) == SOCKET_ERROR) {
-            std::string error = _get_last_error("Failed to get host name.");
-
-            // todo: do not throw, just close the socket or what not
-            throw std::runtime_error(error.c_str());
-        }
-
-        std::string body = "<p>host ip: " + std::string(client_ip) + ":" + std::to_string(client_port) +
-                           "</p>\n"
-                           "<p>host name: " + std::string(hostname) +
-                           "</p>\n"
-                           "<p>request</p>\n"
-                           "<pre>" + request + "</pre>\n"
-                                               "<a href=''>refresh</a>"
-                                               "\r\n";
-
-        std::string response = "HTTP/1.1 200 OK\r\n"
-                               "Content-Type: text/html; charset=UTF-8\r\n"
-                               "Connection: keep-alive\r\n"
-                               "Content-Length: " + std::to_string(body.size()) + "\r\n\r\n" +
-                               body.c_str();
-
-        ::free(hostname);
-        ::send(connection, response.c_str(), response.size(), 0);
-        close_socket(connection);
-        FD_CLR(connection, &socket_list);
+    if(request.empty()) {
+        request = "(nothing)";
     }
+
+    std::cout << "received : " << request << std::endl;
+
+    {
+        // sockaddr_storage client_addr;
+        //
+        // socklen_t storage_size = sizeof(client_addr);
+        //
+        // ::getpeername(connection, (sockaddr*)&client_addr, &storage_size);
+        //
+        // std::string  client_ip   = get_in_ip((sockaddr*)&client_addr);
+        // unsigned int client_port = get_in_port((sockaddr*)&client_addr);
+        //
+        // auto hostname = (char*)calloc(HOST_NAME_MAX + 1, sizeof(char));
+        // if (::gethostname(hostname, HOST_NAME_MAX) == SOCKET_ERROR) {
+        //     std::string error = _get_last_error("Failed to get host name.");
+        //
+        //     // todo: do not throw, just close the socket or what not
+        //     throw std::runtime_error(error.c_str());
+        // }
+        //
+        // std::string body = "<p>host ip: " + std::string(client_ip) + ":" + std::to_string(client_port) +
+        //                    "</p>\n"
+        //                    "<p>host name: " + std::string(hostname) +
+        //                    "</p>\n"
+        //                    "<p>request</p>\n"
+        //                    "<pre>" + request + "</pre>\n"
+        //                                        "<a href=''>refresh</a>"
+        //                                        "\r\n";
+        //
+        // std::string response = "HTTP/1.1 200 OK\r\n"
+        //                        "Content-Type: text/html; charset=UTF-8\r\n"
+        //                        "Connection: keep-alive\r\n"
+        //                        "Content-Length: " + std::to_string(body.size()) + "\r\n\r\n" +
+        //                        body.c_str();
+        //
+        // ::free(hostname);
+        // ::send(connection, response.c_str(), response.size(), 0);
+        // close_socket(connection);
+        // FD_CLR(connection, &read_list);
+    }
+}
+
+void
+Socket::reset_socket_lists()
+{
+    FD_ZERO(&read_list);
+    FD_ZERO(&write_list);
+    // FD_ZERO(&error_list);
+
+    auto closed = [](const Connection& c){
+        return c.socket == -1;
+    };
+    connections.erase(std::remove_if(connections.begin(), connections.end(), closed), connections.end());
+
+    for (auto &connection: connections) {
+        FD_SET(connection.socket, &read_list);
+        FD_SET(connection.socket, &write_list);
+        // FD_SET(connection->socket, &error_list);
+    }
+}
+
+unsigned int
+Socket::get_last_socket()
+{
+    unsigned int last_socket = server_socket;
+
+    for (auto& connection: connections) {
+        if (connection.socket > last_socket) {
+            last_socket = connection.socket;
+        }
+    }
+
+    return last_socket;
 }
 
 void
 Socket::open()
 {
-    fd_set read_fds;
     unsigned int ceiling = 0;
-    unsigned int max_connections = FD_SETSIZE - 1;
 
     while (true) {
-        read_fds = socket_list;
-        int select_result;
-        timeval timeout = {0};
+        reset_socket_lists();
 
-        if ((select_result = ::select(last_socket + 1, &read_fds, nullptr, nullptr, &timeout)) == SOCKET_ERROR) {
+        unsigned int last_socket = get_last_socket();
+        timeval* timeout = nullptr;
+
+        int select_result;
+
+        if ((select_result = ::select(last_socket + 1, &read_list, &write_list, nullptr, timeout)) == SOCKET_ERROR) {
             std::string error = _get_last_error("Failed to poll connections.");
 
-            close_socket(last_socket);
+            close_socket(server_socket);
 
             throw std::runtime_error(error.c_str());
         } else if (select_result == 0) {
             continue;
         }
 
-        for (SOCKET connection = 0; connection <= last_socket; connection++) {
-            std::cout << connection;
-            if (FD_ISSET(connection, &read_fds)) {
-                bool is_new = connection == socket;
+        std::cout << "select";
 
-                if (is_new) {
-                    if (ceiling < max_connections) {
-                        handle_connection(socket);
-                        ceiling++;
-                    }
-                    std::cout << "a";
-                } else {
-                    receive_data(connection);
-                    ceiling--;
-                    std::cout << "b";
-                }
+        if(FD_ISSET(server_socket, &read_list)) {
+            if (ceiling < max_connections) {
+                handle_connection();
+                ceiling++;
+            }
+        }
+
+        for (auto& connection : connections) {
+            if(connection.socket != -1 && FD_ISSET(connection.socket, &read_list)) {
+                std::cout << "read " << connection.socket << "\n";
+                receive_data(connection.socket);
+                close_socket(connection.socket);
+                connection.socket = -1;
+                ceiling--;
+            }
+
+            if(connection.socket != -1 && FD_ISSET(connection.socket, &write_list)) {
+                std::cout << "write " << connection.socket << "\n";
+                char resp[] = "test";
+                ::send(connection.socket, resp, sizeof(resp), 0);
+                close_socket(connection.socket);
+                connection.socket = -1;
             }
         }
 
@@ -683,7 +731,7 @@ Socket::open()
 void
 Socket::close()
 {
-    close_socket(socket);
+    close_socket(server_socket);
 
     is_open = false;
 }

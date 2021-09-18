@@ -109,6 +109,8 @@ endif ()
 #---------------------------------------------------------------------
 
 set (SOURCE_FILES "interfaces/socket.cpp"
+                  #"timeval.cpp"
+                  "connection.cpp"
                   "socket.cpp"
                   "tcp_socket.cpp"
                   "udp_socket.cpp")
@@ -127,6 +129,7 @@ set (BINARY_NAME "httpwebserver_socket")
 add_library (${BINARY_NAME} ${HTTPWEBSERVER_LIB_TYPE} ${SOURCE_FILES})
 
 configure_file ("${CMAKE_CURRENT_SOURCE_DIR}/interfaces/socket.hpp.in" "${CMAKE_CURRENT_SOURCE_DIR}/interfaces/socket.hpp")
+configure_file ("${CMAKE_CURRENT_SOURCE_DIR}/common.hpp.in"            "${CMAKE_CURRENT_SOURCE_DIR}/common.hpp")
 if (LOSE)
     configure_file ("${CMAKE_CURRENT_SOURCE_DIR}/manifest.rc.in" "${CMAKE_CURRENT_SOURCE_DIR}/manifest.rc")
 endif ()
@@ -150,6 +153,7 @@ if (NOT MSVC)
         list (APPEND COMMON_DEBUG_COMPILE_OPTTIONS #"-Wno-bool-compare"
                                                    #"-Wno-incompatible-pointer-types"
                                                    "-Wno-unused-parameter"
+                                                   "-Wno-sign-compare"
                                                    #"-Wno-unused-variable"
                                                    "-Wno-unused-function"
                                                    "-Wno-format")

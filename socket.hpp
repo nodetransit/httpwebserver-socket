@@ -1,31 +1,13 @@
 #ifndef HTTPWEBSERVER_SOCKET_HPP__
 #define HTTPWEBSERVER_SOCKET_HPP__
 
-#include "interfaces/socket.hpp"
 #include <string>
+#include <vector>
 
-#ifdef LOSE
-#   include <winsock2.h>
-#   include <ws2tcpip.h>
-#
-#   define HOST_NAME_MAX  256
-#elif defined(LINUX)
-#   include <sys/types.h>
-#   include <sys/socket.h>
-#   include <netinet/in.h>
-#   include <arpa/inet.h>
-#   include <netdb.h>
-#   include <unistd.h>
-#   include <errno.h>
-#   include <limits.h>
-#
-#   define SOCKET         int
-#   define SOCKET_ERROR   -1
-#   define INVALID_SOCKET -1
-#endif
-
-#define SOCKET_NOERROR 0
-
+#include "common.hpp"
+#include "interfaces/socket.hpp"
+#include "connection.hpp"
+// #include "timeval.hpp"
 
 namespace nt { namespace http {
 
@@ -35,14 +17,18 @@ class __HttpWebServerSocketPort__ Socket :
       public nt::http::interfaces::Socket
 {
 private:
-    std::string port;
-    unsigned int queue_count;
+    std::string        port;
+    unsigned int       queue_count;
+    const unsigned int max_connections;
 
-    SOCKET socket;
-    SOCKET last_socket;
-    fd_set socket_list;
+    SOCKET server_socket;
 
     bool is_open;
+
+    std::vector<Connection> connections;
+    fd_set                  read_list;
+    fd_set                  write_list;
+    fd_set                  error_list;
 
 protected:
     int protocol;
@@ -61,7 +47,9 @@ private:
     addrinfo* get_addrinfo(const char*);
     void create_socket(addrinfo*);
     void close_socket(SOCKET);
-    void handle_connection(SOCKET);
+    void reset_socket_lists();
+    unsigned int get_last_socket();
+    void handle_connection();
     void receive_data(SOCKET);
 };
 
