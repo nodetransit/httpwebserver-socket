@@ -573,7 +573,8 @@ Socket::handle_connection()
         std::string  client_ip   = get_in_ip((sockaddr*)&client_addr);
         unsigned int client_port = get_in_port((sockaddr*)&client_addr);
 
-        std::cout << "[" << server_socket << "] has "
+        std::cout << "------------------------------\n"
+                  << "[" << server_socket << "] has "
                   << "new connection from " << client_ip << ":" << client_port
                   << " [" << client << "]"
                   << std::endl;
@@ -597,6 +598,8 @@ Socket::receive_data(SOCKET connection)
             // throw std::runtime_error(error.c_str());
             break;
         }
+
+        buffer[bytes_rx] = '\0';
 
         request += std::string(buffer);
 
@@ -644,7 +647,7 @@ Socket::write_data(SOCKET connection)
         throw std::runtime_error(error.c_str());
     }
 
-    // tthread::this_thread::sleep_for(tthread::chrono::milliseconds(5000));
+    tthread::this_thread::sleep_for(tthread::chrono::milliseconds(0));
 
     std::string body = "<p>host ip: " + std::string(client_ip) + ":" + std::to_string(client_port) +
                        "</p>\n"
@@ -664,7 +667,7 @@ Socket::write_data(SOCKET connection)
     ::free(hostname);
     ::send(connection, response.c_str(), response.size(), 0);
     // close_socket(connection);
-    // FD_CLR(connection, &read_list);
+    FD_CLR(connection, &write_list);
     
     std::cout << "writing response"
               << "to [" << connection << "]"
@@ -710,30 +713,36 @@ Socket::get_last_socket()
     return last_socket;
 }
 
+bool
+Socket::select()
+{
+    reset_socket_lists();
+
+    unsigned int last_socket = get_last_socket();
+    timeval* timeout = nullptr;
+
+    int select_result;
+
+    std::cout << "selecting from " << connections.size() << " connection(s)\n";
+
+    if ((select_result = ::select(last_socket + 1, &read_list, &write_list, nullptr, timeout)) == SOCKET_ERROR) {
+        std::string error = _get_last_error("Failed to poll connections.");
+
+        close_socket(server_socket);
+
+        throw std::runtime_error(error.c_str());
+    }
+
+    return select_result == 0;
+}
+
 void
 Socket::open()
 {
     unsigned int ceiling = 0;
 
     while (true) {
-        reset_socket_lists();
-
-        unsigned int last_socket = get_last_socket();
-        timeval* timeout = nullptr;
-
-        int select_result;
-
-        std::cout << "selecting from " << connections.size() << " connection(s)\n";
-
-        if ((select_result = ::select(last_socket + 1, &read_list, &write_list, nullptr, timeout)) == SOCKET_ERROR) {
-            std::string error = _get_last_error("Failed to poll connections.");
-
-            close_socket(server_socket);
-
-            throw std::runtime_error(error.c_str());
-        } else if (select_result == 0) {
-            continue;
-        }
+        continue_if (select());
 
         if(FD_ISSET(server_socket, &read_list)) {
             if (ceiling < max_connections) {
