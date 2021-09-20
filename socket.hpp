@@ -3,6 +3,8 @@
 
 #include <string>
 #include <vector>
+#include <cstdio>
+#include <cstdlib>
 
 #include "common.hpp"
 #include "interfaces/socket.hpp"
@@ -21,6 +23,7 @@ private:
     unsigned int       queue_count;
     const unsigned int max_connections;
 
+    SOCKET server_pipe;
     SOCKET server_socket;
 
     bool is_open;

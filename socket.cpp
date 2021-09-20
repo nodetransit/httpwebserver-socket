@@ -17,6 +17,8 @@
 using namespace nt::http;
 
 namespace {
+const unsigned int NUMBER_OF_THE_BEAST = 0600;
+
 const std::string
 _get_last_error()
 {
@@ -358,6 +360,61 @@ Socket::get_addrinfo(const char* server_address)
     return server_info;
 }
 
+static int
+create_pipe()
+{
+    // static const std::vector<std::string> tmpvars = {
+    //       "TMPDIR",
+    //       "TEMP",
+    //       "TMP"
+    // };
+    //
+    // char* tmpdir;
+    // for (auto &var : tmpvars) {
+    //     tmpdir = std::getenv(var.c_str());
+    //
+    //     if(tmpdir != nullptr) {
+    //         break;
+    //     }
+    // }
+    //
+    // if(tmpdir == nullptr) {
+    //     std::cerr << "unable to create pipe. cannot find temporary directory." << std::endl;
+    //
+    //     // return;
+    // }
+
+    char tmpname[L_tmpnam] = {0};
+
+    if(::tmpnam(tmpname) == nullptr) {
+        std::cout << "unable to create temp name" << std::endl;
+
+        return -1;
+    }
+
+    if(::mkfifo(tmpname, NUMBER_OF_THE_BEAST) == -1) {
+        std::string error = _get_last_error();
+
+        std::cerr << error << std::endl;
+
+        return -1;
+    }
+
+    int pipe = ::open(tmpname, O_RDONLY | O_NONBLOCK);
+
+    if(pipe == -1) {
+        std::string error = _get_last_error();
+
+        std::cerr << error << std::endl;
+
+        return -1;
+    }
+
+    std::cout << "temp name : " << tmpname << std::endl;
+
+    return pipe;
+}
+
 void
 Socket::create_socket(addrinfo* server_info)
 {
@@ -434,6 +491,12 @@ Socket::bind(const char* server_address, const char* service)
     port = service;
 
     server_info = get_addrinfo(server_address);
+
+    int pipe = create_pipe();
+
+    if(pipe != -1) {
+        connections.push_back(pipe);
+    }
 
     create_socket(server_info);
 }
