@@ -448,7 +448,7 @@ get_bound_port(SOCKET socket)
 
     socklen_t addrlen = (socklen_t)sizeof(sin);
 
-    if(::getsockname(socket, (sockaddr*)&sin, &addrlen) != SOCKET_NOERROR) {
+    if (::getsockname(socket, (sockaddr * ) & sin, &addrlen) != SOCKET_NOERROR) {
         std::string error = _get_last_error("Unable to get bound port.");
 
         throw std::runtime_error(error.c_str());
@@ -460,7 +460,7 @@ get_bound_port(SOCKET socket)
 void
 Socket::create_socket(addrinfo* server_info)
 {
-    int  bind_result = SOCKET_NOERROR;
+    int bind_result = SOCKET_NOERROR;
     server_socket = INVALID_SOCKET;
 
     for (addrinfo* p = server_info; p != nullptr; p = p->ai_next) {
@@ -473,8 +473,8 @@ Socket::create_socket(addrinfo* server_info)
         continue_if ((server_socket = ::socket(p->ai_family, p->ai_socktype, p->ai_protocol)) == INVALID_SOCKET);
 
 #ifdef LOSE
-        static const char ONE = '1';
-        int REUSE_PORT_ADDR = SO_REUSEADDR;
+        static const char ONE             = '1';
+        int               REUSE_PORT_ADDR = SO_REUSEADDR;
 #elif defined(LINUX)
         static const int ONE = 1;
         int REUSE_PORT_ADDR = SO_REUSEPORT;
@@ -494,7 +494,7 @@ Socket::create_socket(addrinfo* server_info)
         throw std::runtime_error(error.c_str());
     }
 
-    if(bind_result == SOCKET_ERROR) {
+    if (bind_result == SOCKET_ERROR) {
         std::string error = _get_last_error("Failed to bind port/service " + port + ".");
 
         close_socket(server_socket);
@@ -515,9 +515,9 @@ Socket::bind(const char* server_address, const char* service)
     addrinfo* server_info = nullptr;
 
     ______________________________________________________________
-        if(server_info != nullptr) {
-            freeaddrinfo(server_info);
-        }
+              if (server_info != nullptr) {
+                  freeaddrinfo(server_info);
+              }
     _____________________________________________________________;
 
     port = service;
@@ -540,7 +540,7 @@ Socket::listen(const unsigned int count, event_callback callback)
 
     int listen_result = ::listen(server_socket, queue_count);
 
-    if(listen_result == SOCKET_ERROR) {
+    if (listen_result == SOCKET_ERROR) {
         std::string error = _get_last_error("Failed to listen to port/service " + port + ".");
 
         close_socket(server_socket);
@@ -557,7 +557,7 @@ Socket::handle_connection()
     sockaddr_storage client_addr;
 
     socklen_t storage_size = sizeof(client_addr);
-    SOCKET client          = ::accept(server_socket, (sockaddr*)&client_addr, &storage_size);
+    SOCKET    client       = ::accept(server_socket, (sockaddr * ) & client_addr, &storage_size);
 
     if (client == INVALID_SOCKET) {
         std::string error = _get_last_error("Failed to accept from client.");
@@ -570,8 +570,8 @@ Socket::handle_connection()
     connections.push_back(client);
 
     {
-        std::string  client_ip   = get_in_ip((sockaddr*)&client_addr);
-        unsigned int client_port = get_in_port((sockaddr*)&client_addr);
+        std::string  client_ip   = get_in_ip((sockaddr * ) & client_addr);
+        unsigned int client_port = get_in_port((sockaddr * ) & client_addr);
 
         std::cout << "------------------------------\n"
                   << "[" << server_socket << "] has "
@@ -588,8 +588,8 @@ Socket::receive_data(SOCKET connection)
     std::string request;
 
     repeat {
-        char buffer[MAX_INPUT] = {0};
-        const static int flags = 0; //MSG_DONTWAIT;
+        char             buffer[MAX_INPUT] = {0};
+        const static int flags             = 0; //MSG_DONTWAIT;
 
         if ((bytes_rx = ::recv(connection, buffer, sizeof(buffer) - 1, flags)) == SOCKET_ERROR) {
             std::string error = _get_last_error("Failed to receive data.");
@@ -607,18 +607,17 @@ Socket::receive_data(SOCKET connection)
             // signifies the end of the headers
             // if there is post data, one needs to check the
             // Content-Length
-            std::string end = request.substr(request.size() - 4, 4);
-            bool is_end = end == "\r\n\r\n";
+            std::string end    = request.substr(request.size() - 4, 4);
+            bool        is_end = end == "\r\n\r\n";
 
-            if(is_end) {
+            if (is_end) {
                 // FD_CLR(connection, &read_list);
                 break;
             }
         }
-    }
-    until(bytes_rx == 0);
+    } until(bytes_rx == 0);
 
-    if(request.empty()) {
+    if (request.empty()) {
         request = "(nothing)";
     }
 
@@ -634,10 +633,10 @@ Socket::write_data(SOCKET connection)
 
     socklen_t storage_size = sizeof(client_addr);
 
-    ::getpeername(connection, (sockaddr*)&client_addr, &storage_size);
+    ::getpeername(connection, (sockaddr * ) & client_addr, &storage_size);
 
-    std::string  client_ip   = get_in_ip((sockaddr*)&client_addr);
-    unsigned int client_port = get_in_port((sockaddr*)&client_addr);
+    std::string  client_ip   = get_in_ip((sockaddr * ) & client_addr);
+    unsigned int client_port = get_in_port((sockaddr * ) & client_addr);
 
     auto hostname = (char*)calloc(HOST_NAME_MAX + 1, sizeof(char));
     if (::gethostname(hostname, HOST_NAME_MAX) == SOCKET_ERROR) {
@@ -668,7 +667,7 @@ Socket::write_data(SOCKET connection)
     ::send(connection, response.c_str(), response.size(), 0);
     // close_socket(connection);
     FD_CLR(connection, &write_list);
-    
+
     std::cout << "writing response"
               << "to [" << connection << "]"
               << std::endl;
@@ -681,7 +680,7 @@ Socket::reset_socket_lists()
     FD_ZERO(&write_list);
     // FD_ZERO(&error_list);
 
-    auto closed = [](const Connection& c){
+    auto closed = [](const Connection& c) {
         return c.socket == INVALID_SOCKET;
     };
 
@@ -690,7 +689,7 @@ Socket::reset_socket_lists()
                                      closed),
                       connections.end());
 
-    for (auto &connection: connections) {
+    for (auto& connection: connections) {
         // continue_if(connection.socket == INVALID_SOCKET);
 
         FD_SET(connection.socket, &read_list);
@@ -719,7 +718,7 @@ Socket::select()
     reset_socket_lists();
 
     unsigned int last_socket = get_last_socket();
-    timeval* timeout = nullptr;
+    Timeval timeout = Timeval::INFINITE;
 
     int select_result;
 
@@ -744,7 +743,7 @@ Socket::open()
     while (true) {
         continue_if (select());
 
-        if(FD_ISSET(server_socket, &read_list)) {
+        if (FD_ISSET(server_socket, &read_list)) {
             if (ceiling < max_connections) {
                 handle_connection();
                 ceiling++;
@@ -753,17 +752,17 @@ Socket::open()
 
         for (auto& connection : connections) {
             continue_if (connection.socket == INVALID_SOCKET
-                        // || connection.socket == server_socket
-                            );
+            // || connection.socket == server_socket
+                        );
 
-            if(connection.socket != server_socket && FD_ISSET(connection.socket, &read_list)) {
+            if (connection.socket != server_socket && FD_ISSET(connection.socket, &read_list)) {
                 receive_data(connection.socket);
                 // close_socket(connection.socket);
                 // connection.socket = INVALID_SOCKET;
                 // ceiling--;
             }
 
-            if(FD_ISSET(connection.socket, &write_list)) {
+            if (FD_ISSET(connection.socket, &write_list)) {
                 write_data(connection.socket);
                 close_socket(connection.socket);
                 connection.socket = INVALID_SOCKET;
@@ -788,7 +787,7 @@ Socket::close_socket(SOCKET s)
 #ifdef LOSE
     int shutdown_result = ::shutdown(s, SD_BOTH);
 
-    if(shutdown_result == SOCKET_ERROR && ::WSAGetLastError() == WSAENOTCONN) {
+    if (shutdown_result == SOCKET_ERROR && ::WSAGetLastError() == WSAENOTCONN) {
         shutdown_result = SOCKET_NOERROR;
     }
 #elif defined(LINUX)
@@ -799,7 +798,7 @@ Socket::close_socket(SOCKET s)
     }
 #endif
 
-    if(shutdown_result == SOCKET_ERROR) {
+    if (shutdown_result == SOCKET_ERROR) {
         std::string error = _get_last_error("Failed to shutdown connection.");
 
         std::cerr << error << std::endl;

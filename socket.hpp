@@ -7,7 +7,7 @@
 #include "common.hpp"
 #include "interfaces/socket.hpp"
 #include "connection.hpp"
-// #include "timeval.hpp"
+#include "timeval.hpp"
 
 namespace nt { namespace http {
 

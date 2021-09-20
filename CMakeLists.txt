@@ -109,7 +109,7 @@ endif ()
 #---------------------------------------------------------------------
 
 set (SOURCE_FILES "interfaces/socket.cpp"
-                  #"timeval.cpp"
+                  "timeval.cpp"
                   "connection.cpp"
                   "socket.cpp"
                   "tcp_socket.cpp"
@@ -197,8 +197,7 @@ endif ()
 #---------------------------------------------------------------------
 
 if (${HTTPWEBSERVER_LIB_TYPE} STREQUAL "STATIC")
-    list (APPEND COMMON_COMPILE_OPTIONS "-fPIC"
-          )
+    set_property(TARGET ${BINARY_NAME} PROPERTY POSITION_INDEPENDENT_CODE ON)
     add_definitions (-DHTTPWEBSERVER_SOCKET_LIB_EXPORT=1
                      )
 elseif (${HTTPWEBSERVER_LIB_TYPE} STREQUAL "SHARED")
