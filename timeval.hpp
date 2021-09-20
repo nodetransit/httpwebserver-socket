@@ -11,8 +11,8 @@ namespace nt { namespace http {
 class Timeval
 {
 public:
-    const static Timeval INFINITE;
-    const static Timeval ZERO;
+    const static Timeval Infinite;
+    const static Timeval Zero;
 
 private:
     std::unique_ptr<timeval> time;

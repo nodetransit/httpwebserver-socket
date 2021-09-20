@@ -627,7 +627,7 @@ Socket::select()
     reset_socket_lists();
 
     unsigned int last_socket = get_last_socket();
-    Timeval timeout = Timeval::INFINITE;
+    Timeval timeout = Timeval::Infinite;
 
     int select_result;
 

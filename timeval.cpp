@@ -65,8 +65,8 @@ Timeval::to_string() const
     }
 }
 
-const Timeval Timeval::INFINITE;
-const Timeval Timeval::ZERO  = Timeval((int)0);
+const Timeval Timeval::Infinite;
+const Timeval Timeval::Zero  = Timeval((int)0);
 
 std::ostream&
 operator<<(std::ostream& stream, const nt::http::Timeval& t)
