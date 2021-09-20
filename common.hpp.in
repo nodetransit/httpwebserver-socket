@@ -8,6 +8,7 @@
 #cmakedefine LINUX
 #cmakedefine LOSE
 #cmakedefine BANANA
+#cmakedefine HTTP_WEB_SERVER_SOCKET_DEBUG
 
 #ifdef LOSE
 #   include <winsock2.h>

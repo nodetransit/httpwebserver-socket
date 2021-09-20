@@ -18,13 +18,13 @@ if (CMAKE_BUILD_TYPE STREQUAL "Debug")
 endif ()
 
 if (NOT DEBUG)
-    unset (HTTP_WEB_SERVER_DEBUG)
+    unset (HTTP_WEB_SERVER_SOCKET_DEBUG)
     set (RELEASE ON)
     unset (DEBUG)
     unset (_DEBUG)
     set (NDEBUG ON)
 else ()
-    set (HTTP_WEB_SERVER_DEBUG ON)
+    set (HTTP_WEB_SERVER_SOCKET_DEBUG ON)
     unset (RELEASE)
     set (DEBUG ON)
     set (_DEBUG ON)
@@ -109,6 +109,7 @@ endif ()
 #---------------------------------------------------------------------
 
 set (SOURCE_FILES "interfaces/socket.cpp"
+                  "utility/socket.cpp"
                   "timeval.cpp"
                   "connection.cpp"
                   "socket.cpp"
