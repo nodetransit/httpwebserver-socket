@@ -413,7 +413,9 @@ Socket::create_socket(addrinfo* server_info)
         throw std::runtime_error(error.c_str());
     }
 
+#ifdef HTTP_WEB_SERVER_SOCKET_DEBUG
     std::cout << "listening to port " << bound_port << std::endl;
+#endif
 
     is_open = true;
 }
@@ -482,11 +484,13 @@ Socket::handle_connection()
         std::string  client_ip   = nt::http::utility::socket::get_in_ip(&client_addr);
         unsigned int client_port = nt::http::utility::socket::get_in_port(&client_addr);
 
+#ifdef HTTP_WEB_SERVER_SOCKET_DEBUG
         std::cout << "------------------------------\n"
-                  << "[" << server_socket << "] has "
+                  << "server [" << server_socket << "] has "
                   << "new connection from " << client_ip << ":" << client_port
                   << " [" << client << "]"
                   << std::endl;
+#endif
     }
 }
 
@@ -526,13 +530,10 @@ Socket::receive_data(SOCKET connection)
         }
     } until(bytes_rx == 0);
 
-    if (request.empty()) {
-        request = "(nothing)";
-    }
-
-    std::cout << "received from [" << connection << "]\n"
-              << request
+#ifdef HTTP_WEB_SERVER_SOCKET_DEBUG
+    std::cout << "received request from [" << connection << "]"
               << std::endl;
+#endif
 }
 
 void
@@ -542,7 +543,7 @@ Socket::write_data(SOCKET connection)
 
     socklen_t storage_size = sizeof(client_addr);
 
-    ::getpeername(connection, (sockaddr * ) & client_addr, &storage_size);
+    ::getpeername(connection, (sockaddr*)&client_addr, &storage_size);
 
     std::string  client_ip   = nt::http::utility::socket::get_in_ip(&client_addr);
     unsigned int client_port = nt::http::utility::socket::get_in_port(&client_addr);
@@ -557,7 +558,7 @@ Socket::write_data(SOCKET connection)
 
     tthread::this_thread::sleep_for(tthread::chrono::milliseconds(0));
 
-    std::string body = "<p>host ip: " + std::string(client_ip) + ":" + std::to_string(client_port) +
+    std::string body = "<p>client ip: " + std::string(client_ip) + ":" + std::to_string(client_port) +
                        "</p>\n"
                        "<p>host name: " + std::string(hostname) +
                        "</p>\n"
@@ -577,9 +578,11 @@ Socket::write_data(SOCKET connection)
     // close_socket(connection);
     FD_CLR(connection, &write_list);
 
+#ifdef HTTP_WEB_SERVER_SOCKET_DEBUG
     std::cout << "writing response"
               << "to [" << connection << "]"
               << std::endl;
+#endif
 }
 
 void
@@ -631,7 +634,9 @@ Socket::select()
 
     int select_result;
 
+#ifdef HTTP_WEB_SERVER_SOCKET_DEBUG
     std::cout << "selecting from " << connections.size() << " connection(s)\n";
+#endif
 
     if ((select_result = ::select(last_socket + 1, &read_list, &write_list, nullptr, timeout)) == SOCKET_ERROR) {
         std::string error = _get_last_error("Failed to poll connections.");
