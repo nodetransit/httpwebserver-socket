@@ -226,8 +226,8 @@ elseif (${HTTPWEBSERVER_LIB_TYPE} STREQUAL "SHARED")
 
         endif ()
     else ()
-        set_target_properties (${BINARY_NAME} PROPERTIES OUTPUT_NAME "httpwebserver_socket"
-                                                         ARCHIVE_OUTPUT_NAME "httpwebserver_socket")
+        set_target_properties (${BINARY_NAME} PROPERTIES OUTPUT_NAME ${BINARY_NAME}
+                                                         ARCHIVE_OUTPUT_NAME ${BINARY_NAME})
     endif ()
 
     #if (LINUX)
