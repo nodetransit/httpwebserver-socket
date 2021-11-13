@@ -2,7 +2,15 @@
 
 using namespace nt::http;
 
-Connection::Connection(const int n) :
+Connection::Connection(const SOCKET n) :
       socket(n)
 {
 }
+
+#ifdef LOSE
+Connection::Connection(const SOCKET n, const HANDLE h) :
+      socket(n),
+      event(h)
+{
+}
+#endif

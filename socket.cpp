@@ -30,6 +30,12 @@ _get_last_error()
 
     switch (error) {
 #ifdef LOSE
+    case EACCES: return "Tried to open a read-only file for writing, file's sharing mode does not allow the specified operations, or the given path is a directory.";
+    case EEXIST: return "_O_CREAT and _O_EXCL flags specified, but filename already exists.";
+    case EINVAL: return "Invalid oflag or pmode argument.";
+    case EMFILE: return "No more file descriptors are available (too many files are open).";
+    case ENOENT: return "File or path not found.";
+
     case WSA_INVALID_HANDLE: return "Specified event object handle is invalid.";
     case WSA_NOT_ENOUGH_MEMORY: return "Insufficient memory available.";
     case WSA_INVALID_PARAMETER: return "One or more parameters are invalid.";
@@ -269,6 +275,33 @@ _get_last_error(const std::string& prefix)
     return prefix + " " + _get_last_error();
 }
 
+#ifdef LOSE
+std::unique_ptr<HANDLE[]>
+_get_connection_handles(const std::vector<Connection> &connections)
+{
+    auto handles = std::make_unique<HANDLE[]>(connections.size());
+
+    int i = 0;
+    for (auto &connection : connections) {
+        handles[i++] = connection.event;
+    }
+
+    return handles;
+}
+
+static Connection*
+_find_connection_by_event_handle(const std::vector<Connection> &connections, HANDLE handle)
+{
+    for (auto &connection : connections) {
+        if (connection.event == handle) {
+            return const_cast<Connection*>(&connection);
+        }
+    }
+
+    return nullptr;
+}
+#endif
+
 void
 _tls()
 {
@@ -392,6 +425,11 @@ create_pipe()
         return -1;
     }
 
+    std::cout << "Creating file " << tmpname << std::endl;
+
+    int pipe = -1;
+
+#ifdef LINUX
     if(::mkfifo(tmpname, NUMBER_OF_THE_BEAST) == -1) {
         std::string error = _get_last_error();
 
@@ -400,7 +438,7 @@ create_pipe()
         return -1;
     }
 
-    int pipe = ::open(tmpname, O_RDONLY | O_NONBLOCK);
+    pipe = ::open(tmpname, O_RDONLY | O_NONBLOCK);
 
     if(pipe == -1) {
         std::string error = _get_last_error();
@@ -410,8 +448,50 @@ create_pipe()
         return -1;
     }
 
-    std::cout << "temp name : " << tmpname << std::endl;
+#elif defined(LOSE)
+    //HANDLE hPipe = ::CreateNamedPipe(tmpname,
+    //                                 PIPE_ACCESS_DUPLEX,
+    //                                 PIPE_TYPE_BYTE | PIPE_NOWAIT,
+    //                                 1, 0, 0, 0, NULL);
 
+    HANDLE hPipe = CreateFile("test.txt",
+                              GENERIC_READ | GENERIC_WRITE,
+                              FILE_SHARE_READ | FILE_SHARE_WRITE,
+                              0,
+                              CREATE_ALWAYS,
+                              FILE_ATTRIBUTE_TEMPORARY,
+                              0);
+
+    //if (hPipe == NULL || hPipe == INVALID_HANDLE_VALUE) {
+    //    std::cout << "Failed to create outbound pipe instance." << std::endl;
+    //    // look up error code here using GetLastError()
+    //    return -1;
+    //}
+
+    // BOOL result = ::ConnectNamedPipe(hPipe, NULL);
+    // if (!result) {
+    //     std::cout << "Failed to make connection on named pipe." << std::endl;
+    //     // look up error code here using GetLastError()
+    //     ::CloseHandle(pipe); // close the pipe
+    //     return -1;
+    // }
+
+    //SOCKET pipe_socket = ::socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
+
+    pipe = _open_osfhandle((intptr_t)hPipe, _O_RDONLY);
+
+    //pipe = _open(tmpname, _O_RDONLY | _O_CREAT | _O_TEMPORARY, _S_IREAD | _S_IWRITE);
+
+    if(pipe == -1) {
+        std::string error = _get_last_error("Error opening file.");
+
+        std::cerr << error << std::endl;
+
+        return -1;
+    }
+#endif
+
+    std::cout << "temp name : " << tmpname << std::endl;
     return pipe;
 }
 
@@ -494,9 +574,11 @@ Socket::bind(const char* server_address, const char* service)
 
     int pipe = create_pipe();
 
+#ifdef LINUX
     if(pipe != -1) {
         connections.push_back(pipe);
     }
+#endif
 
     create_socket(server_info);
 }
@@ -505,6 +587,37 @@ void
 Socket::bind(const char* server_address, const unsigned short port_no)
 {
     bind(server_address, std::to_string(port_no).c_str());
+}
+
+static Connection
+_create_connection(SOCKET socket)
+{
+#ifdef LOSE
+    //HANDLE ev_handle = ::CreateEvent(nullptr, true, true, nullptr);
+    HANDLE ev_handle = ::WSACreateEvent();
+
+    std::cout << "event handle:" << ev_handle << "\n";
+
+    if(ev_handle == WSA_INVALID_EVENT) {
+        std::string error = _get_last_error("Failed to create event.");
+
+        throw std::runtime_error(error.c_str());
+    }
+
+    int select_result = ::WSAEventSelect(socket,
+                                         ev_handle,
+                                         FD_ACCEPT | FD_WRITE | FD_CLOSE);
+
+    if (select_result == SOCKET_ERROR) {
+        std::string error = _get_last_error("Failed to select WSA event.");
+
+        throw std::runtime_error(error.c_str());
+    }
+
+    return {socket, ev_handle};
+#else
+    return {server_socket};
+#endif
 }
 
 void
@@ -522,7 +635,7 @@ Socket::listen(const unsigned int count, event_callback callback)
         throw std::runtime_error(error.c_str());
     }
 
-    connections.push_back(server_socket);
+    connections.push_back(_create_connection(server_socket));
 }
 
 void
@@ -531,7 +644,7 @@ Socket::handle_connection()
     sockaddr_storage client_addr;
 
     socklen_t storage_size = sizeof(client_addr);
-    SOCKET    client       = ::accept(server_socket, (sockaddr * ) & client_addr, &storage_size);
+    SOCKET    client       = ::accept(server_socket, (sockaddr*)&client_addr, &storage_size);
 
     if (client == INVALID_SOCKET) {
         std::string error = _get_last_error("Failed to accept from client.");
@@ -540,8 +653,11 @@ Socket::handle_connection()
         throw std::runtime_error(error.c_str());
     }
 
+#ifdef LINUX
     FD_SET(client, &read_list);
-    connections.push_back(client);
+#endif
+
+    connections.push_back(_create_connection(client));
 
     {
         std::string  client_ip   = nt::http::utility::socket::get_in_ip(&client_addr);
@@ -715,6 +831,7 @@ Socket::select()
 void
 Socket::open()
 {
+#ifdef LINUX
     unsigned int ceiling = 0;
 
     while (true) {
@@ -748,6 +865,85 @@ Socket::open()
         }
 
     }
+#else
+    unsigned int ceiling = 0;
+
+    while (true) {
+        std::cout << "listening\n";
+
+        auto handles = _get_connection_handles(connections);
+
+        int select_result = ::WaitForMultipleObjects(connections.size(),
+                                                     handles.get(),
+                                                     false,
+                                                     INFINITE);
+
+        std::cout << "selected: " << select_result << "\n";
+
+        if (select_result == WAIT_FAILED) {
+            std::string error = _get_last_error("Failed to select.");
+
+            throw std::runtime_error(error.c_str());
+        } else if (select_result == WAIT_TIMEOUT) {
+            std::string error = _get_last_error("Timeout.");
+
+            close_socket(server_socket);
+            // ::WSACloseEvent(ev_handle);
+
+            throw std::runtime_error(error.c_str());
+        } else {
+            int index = select_result - WSA_WAIT_EVENT_0;
+            HANDLE ev_handle = handles.get()[index];
+
+            Connection* cx = _find_connection_by_event_handle(connections, ev_handle);
+
+            if (cx != nullptr) {
+                sockaddr_storage client_addr;
+
+                socklen_t storage_size = sizeof(client_addr);
+                SOCKET    client       = accept(cx->socket, (sockaddr*)&client_addr, &storage_size);
+
+                if (client == INVALID_SOCKET) {
+                    std::string error = _get_last_error("Failed to accept client.");
+
+                    // todo: do not throw, just close the socket or what not
+                    throw std::runtime_error(error.c_str());
+                }
+
+                {
+                    std::string  client_ip   = nt::http::utility::socket::get_in_ip(&client_addr);
+                    unsigned int client_port = nt::http::utility::socket::get_in_port(&client_addr);
+
+                    std::cout << "------------------------------\n"
+                              << "server [" << server_socket << "] has "
+                              << "new connection from " << client_ip << ":" << client_port
+                              << " [" << client << "]"
+                              << std::endl;
+                }
+
+                std::string body = "<p>test" + std::to_string(rand()) + "</p>";
+
+                std::string response = "HTTP/1.1 200 OK\r\n"
+                                       "Content-Type: text/html; charset=UTF-8\r\n"
+                                       "Connection: keep-alive\r\n"
+                                       "Content-Length: " + std::to_string(body.length()) + "\r\n\r\n" +
+                                       body.c_str();
+
+                send(client, response.c_str(), response.length(), 0);
+                close_socket(client);
+            }
+
+            if(!::WSAResetEvent(ev_handle)) {
+                std::string error = _get_last_error("Unable to reset event.");
+
+                close_socket(server_socket);
+                // ::WSACloseEvent(ev_handle);
+
+                throw std::runtime_error(error.c_str());
+            }
+        }
+    }
+#endif
 }
 
 void

@@ -9,9 +9,15 @@ class Connection
 {
 public:
     SOCKET socket;
+#ifdef LOSE
+    HANDLE  event;
+#endif
 
     Connection() = default;
-    Connection(const int);
+    Connection(const SOCKET);
+#ifdef LOSE
+    Connection(const SOCKET, const HANDLE);
+#endif
 };
 
 }}
