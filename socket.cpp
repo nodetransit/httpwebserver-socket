@@ -276,6 +276,34 @@ _get_last_error(const std::string& prefix)
 }
 
 #ifdef LOSE
+const std::string
+_get_last_error_message(int error)
+{
+    LPTSTR buffer;
+
+    ::FormatMessage(FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS | FORMAT_MESSAGE_ALLOCATE_BUFFER,
+                    NULL,
+                    error,
+                    MAKELANGID(LANG_ENGLISH, SUBLANG_ENGLISH_US),
+                    (LPTSTR)&buffer,
+                    0,
+                    NULL);
+
+    std::string message(buffer);
+    ::LocalFree(buffer);
+    message.erase(message.find_last_not_of(" \n\r\t") + 1);
+
+    return message;
+}
+
+const std::string
+_get_last_error_message()
+{
+    int error = ::GetLastError();
+
+    return _get_last_error_message(error);
+}
+
 std::unique_ptr<HANDLE[]>
 _get_connection_handles(const std::vector<Connection> &connections)
 {
@@ -393,7 +421,7 @@ Socket::get_addrinfo(const char* server_address)
     return server_info;
 }
 
-static int
+static Connection
 create_pipe()
 {
     // static const std::vector<std::string> tmpvars = {
@@ -422,20 +450,20 @@ create_pipe()
     if(::tmpnam(tmpname) == nullptr) {
         std::cout << "unable to create temp name" << std::endl;
 
-        return -1;
+        return {INVALID_SOCKET};
     }
 
     std::cout << "Creating file " << tmpname << std::endl;
 
+#ifdef LINUX
     int pipe = -1;
 
-#ifdef LINUX
     if(::mkfifo(tmpname, NUMBER_OF_THE_BEAST) == -1) {
         std::string error = _get_last_error();
 
         std::cerr << error << std::endl;
 
-        return -1;
+        return {pipe};
     }
 
     pipe = ::open(tmpname, O_RDONLY | O_NONBLOCK);
@@ -445,54 +473,68 @@ create_pipe()
 
         std::cerr << error << std::endl;
 
-        return -1;
+        return {pipe};
     }
-
-#elif defined(LOSE)
-    //HANDLE hPipe = ::CreateNamedPipe(tmpname,
-    //                                 PIPE_ACCESS_DUPLEX,
-    //                                 PIPE_TYPE_BYTE | PIPE_NOWAIT,
-    //                                 1, 0, 0, 0, NULL);
-
-    HANDLE hPipe = CreateFile("test.txt",
-                              GENERIC_READ | GENERIC_WRITE,
-                              FILE_SHARE_READ | FILE_SHARE_WRITE,
-                              0,
-                              CREATE_ALWAYS,
-                              FILE_ATTRIBUTE_TEMPORARY,
-                              0);
-
-    //if (hPipe == NULL || hPipe == INVALID_HANDLE_VALUE) {
-    //    std::cout << "Failed to create outbound pipe instance." << std::endl;
-    //    // look up error code here using GetLastError()
-    //    return -1;
-    //}
-
-    // BOOL result = ::ConnectNamedPipe(hPipe, NULL);
-    // if (!result) {
-    //     std::cout << "Failed to make connection on named pipe." << std::endl;
-    //     // look up error code here using GetLastError()
-    //     ::CloseHandle(pipe); // close the pipe
-    //     return -1;
-    // }
-
-    //SOCKET pipe_socket = ::socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
-
-    pipe = _open_osfhandle((intptr_t)hPipe, _O_RDONLY);
-
-    //pipe = _open(tmpname, _O_RDONLY | _O_CREAT | _O_TEMPORARY, _S_IREAD | _S_IWRITE);
-
-    if(pipe == -1) {
-        std::string error = _get_last_error("Error opening file.");
-
-        std::cerr << error << std::endl;
-
-        return -1;
-    }
-#endif
 
     std::cout << "temp name : " << tmpname << std::endl;
-    return pipe;
+
+    return {pipe};
+#elif defined(LOSE)
+    OVERLAPPED *overlapped = new OVERLAPPED();
+    std::string pipe_name  = "\\\\.\\pipe\\server";
+
+    HANDLE pipe = ::CreateNamedPipe(pipe_name.c_str(),
+                                    PIPE_ACCESS_DUPLEX | FILE_FLAG_OVERLAPPED,
+                                    PIPE_TYPE_BYTE | PIPE_NOWAIT,
+                                    1, 0, 0, 0,
+                                    nullptr);
+
+    if (pipe == nullptr || pipe == INVALID_HANDLE_VALUE) {
+        std::cout << "Failed to create outbound pipe instance. "
+                  << _get_last_error_message()
+                  << std::endl;
+        return {INVALID_SOCKET};
+    }
+
+    overlapped->hEvent = ::CreateEvent(nullptr, true, true, nullptr);
+    if (overlapped->hEvent == nullptr) {
+        std::cout << "Failed to create event. "
+                  << _get_last_error_message()
+                  << std::endl;
+        return {INVALID_SOCKET};
+    }
+
+    BOOL result = ::ConnectNamedPipe(pipe, overlapped);
+    if (!result) {
+        int error = ::GetLastError();
+
+        switch (error) {
+        case ERROR_IO_PENDING: // The overlapped connection in progress.
+            // fPendingIO = TRUE;
+            break;
+
+        case ERROR_PIPE_CONNECTED: // Client is already connected, so signal an event.
+            if (::SetEvent(overlapped->hEvent)) {
+                break;
+            }
+
+        case ERROR_PIPE_LISTENING:
+            break;
+
+        default: { // If an error occurs during the connect operation...
+            std::cout << "Failed to make connection on named pipe. "
+                      << _get_last_error_message(error)
+                      << std::endl;
+            ::CloseHandle(pipe);
+            return {INVALID_SOCKET};
+        }
+        }
+    }
+
+    std::cout << "pipe name: " << pipe_name << std::endl;
+
+    return {INVALID_SOCKET, overlapped->hEvent};
+#endif
 }
 
 void
@@ -572,13 +614,9 @@ Socket::bind(const char* server_address, const char* service)
 
     server_info = get_addrinfo(server_address);
 
-    int pipe = create_pipe();
+    Connection pipe = create_pipe();
 
-#ifdef LINUX
-    if(pipe != -1) {
-        connections.push_back(pipe);
-    }
-#endif
+    connections.push_back(pipe);
 
     create_socket(server_info);
 }
