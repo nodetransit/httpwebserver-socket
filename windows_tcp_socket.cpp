@@ -12,7 +12,7 @@
 
 #include <utility/socket.hpp>
 
-#include "socket.hpp"
+#include "windows_tcp_socket.hpp"
 
 using namespace nt::http;
 
@@ -22,14 +22,9 @@ const unsigned int NUMBER_OF_THE_BEAST = 0600;
 const std::string
 _get_last_error()
 {
-#ifdef LOSE
     int error = ::WSAGetLastError();
-#elif defined(LINUX)
-    int error = errno;
-#endif
 
     switch (error) {
-#ifdef LOSE
     case EACCES: return "Tried to open a read-only file for writing, file's sharing mode does not allow the specified operations, or the given path is a directory.";
     case EEXIST: return "_O_CREAT and _O_EXCL flags specified, but filename already exists.";
     case EINVAL: return "Invalid oflag or pmode argument.";
@@ -131,140 +126,7 @@ _get_last_error()
     case WSA_QOS_ESDMODEOBJ: return "Invalid QoS shape discard mode object.";
     case WSA_QOS_ESHAPERATEOBJ: return "Invalid QoS shaping rate object.";
     case WSA_QOS_RESERVED_PETYPE: return "Reserved policy QoS element type.";
-#elif defined(LINUX)
-    case EPERM: return "Operation not permitted";
-    case ENOENT: return "No such file or directory";
-    case ESRCH: return "No such process";
-    case EINTR: return "Interrupted system call";
-    case EIO: return "I/O error";
-    case ENXIO: return "No such device or address";
-    case E2BIG: return "Argument list too long";
-    case ENOEXEC: return "Exec format error";
-    case EBADF: return "Bad file number";
-    case ECHILD: return "No child processes";
-    // case EAGAIN: return "Try again";
-    case ENOMEM: return "Out of memory";
-    case EACCES: return "Permission denied";
-    case EFAULT: return "Bad address";
-    case ENOTBLK: return "Block device required";
-    case EBUSY: return "Device or resource busy";
-    case EEXIST: return "File exists";
-    case EXDEV: return "Cross-device link";
-    case ENODEV: return "No such device";
-    case ENOTDIR: return "Not a directory";
-    case EISDIR: return "Is a directory";
-    case EINVAL: return "Invalid argument";
-    case ENFILE: return "File table overflow";
-    case EMFILE: return "Too many open files";
-    case ENOTTY: return "Not a typewriter";
-    case ETXTBSY: return "Text file busy";
-    case EFBIG: return "File too large";
-    case ENOSPC: return "No space left on device";
-    case ESPIPE: return "Illegal seek";
-    case EROFS: return "Read-only file system";
-    case EMLINK: return "Too many links";
-    case EPIPE: return "Broken pipe";
-    case EDOM: return "Math argument out of domain of func";
-    case ERANGE: return "Math result not representable";
-    case EDEADLK: return "Resource deadlock would occur";
-    case ENAMETOOLONG: return "File name too long";
-    case ENOLCK: return "No record locks available";
-    case ENOSYS: return "Invalid system call number";
-    case ENOTEMPTY: return "Directory not empty";
-    case ELOOP: return "Too many symbolic links encountered";
-    case EWOULDBLOCK: return "Operation would block";
-    case ENOMSG: return "No message of desired type";
-    case EIDRM: return "Identifier removed";
-    case ECHRNG: return "Channel number out of range";
-    case EL2NSYNC: return "Level 2 not synchronized";
-    case EL3HLT: return "Level 3 halted";
-    case EL3RST: return "Level 3 reset";
-    case ELNRNG: return "Link number out of range";
-    case EUNATCH: return "Protocol driver not attached";
-    case ENOCSI: return "No CSI structure available";
-    case EL2HLT: return "Level 2 halted";
-    case EBADE: return "Invalid exchange";
-    case EBADR: return "Invalid request descriptor";
-    case EXFULL: return "Exchange full";
-    case ENOANO: return "No anode";
-    case EBADRQC: return "Invalid request code";
-    case EBADSLT: return "Invalid slot";
-    case EBFONT: return "Bad font file format";
-    case ENOSTR: return "Device not a stream";
-    case ENODATA: return "No data available";
-    case ETIME: return "Timer expired";
-    case ENOSR: return "Out of streams resources";
-    case ENONET: return "Machine is not on the network";
-    case ENOPKG: return "Package not installed";
-    case EREMOTE: return "Object is remote";
-    case ENOLINK: return "Link has been severed";
-    case EADV: return "Advertise error";
-    case ESRMNT: return "Srmount error";
-    case ECOMM: return "Communication error on send";
-    case EPROTO: return "Protocol error";
-    case EMULTIHOP: return "Multihop attempted";
-    case EDOTDOT: return "RFS specific error";
-    case EBADMSG: return "Not a data message";
-    case EOVERFLOW: return "Value too large for defined data type";
-    case ENOTUNIQ: return "Name not unique on network";
-    case EBADFD: return "File descriptor in bad state";
-    case EREMCHG: return "Remote address changed";
-    case ELIBACC: return "Can not access a needed shared library";
-    case ELIBBAD: return "Accessing a corrupted shared library";
-    case ELIBSCN: return ".lib section in a.out corrupted";
-    case ELIBMAX: return "Attempting to link in too many shared libraries";
-    case ELIBEXEC: return "Cannot exec a shared library directly";
-    case EILSEQ: return "Illegal byte sequence";
-    case ERESTART: return "Interrupted system call should be restarted";
-    case ESTRPIPE: return "Streams pipe error";
-    case EUSERS: return "Too many users";
-    case ENOTSOCK: return "Socket operation on non-socket";
-    case EDESTADDRREQ: return "Destination address required";
-    case EMSGSIZE: return "Message too long";
-    case EPROTOTYPE: return "Protocol wrong type for socket";
-    case ENOPROTOOPT: return "Protocol not available";
-    case EPROTONOSUPPORT: return "Protocol not supported";
-    case ESOCKTNOSUPPORT: return "Socket type not supported";
-    case EOPNOTSUPP: return "Operation not supported on transport endpoint";
-    case EPFNOSUPPORT: return "Protocol family not supported";
-    case EAFNOSUPPORT: return "Address family not supported by protocol";
-    case EADDRINUSE: return "Address already in use";
-    case EADDRNOTAVAIL: return "Cannot assign requested address";
-    case ENETDOWN: return "Network is down";
-    case ENETUNREACH: return "Network is unreachable";
-    case ENETRESET: return "Network dropped connection because of reset";
-    case ECONNABORTED: return "Software caused connection abort";
-    case ECONNRESET: return "Connection reset by peer";
-    case ENOBUFS: return "No buffer space available";
-    case EISCONN: return "Transport endpoint is already connected";
-    case ENOTCONN: return "Transport endpoint is not connected";
-    case ESHUTDOWN: return "Cannot send after transport endpoint shutdown";
-    case ETOOMANYREFS: return "Too many references: cannot splice";
-    case ETIMEDOUT: return "Connection timed out";
-    case ECONNREFUSED: return "Connection refused";
-    case EHOSTDOWN: return "Host is down";
-    case EHOSTUNREACH: return "No route to host";
-    case EALREADY: return "Operation already in progress";
-    case EINPROGRESS: return "Operation now in progress";
-    case ESTALE: return "Stale file handle";
-    case EUCLEAN: return "Structure needs cleaning";
-    case ENOTNAM: return "Not a XENIX named type file";
-    case ENAVAIL: return "No XENIX semaphores available";
-    case EISNAM: return "Is a named type file";
-    case EREMOTEIO: return "Remote I/O error";
-    case EDQUOT: return "Quota exceeded";
-    case ENOMEDIUM: return "No medium found";
-    case EMEDIUMTYPE: return "Wrong medium type";
-    case ECANCELED: return "Operation Canceled";
-    case ENOKEY: return "Required key not available";
-    case EKEYEXPIRED: return "Key has expired";
-    case EKEYREVOKED: return "Key has been revoked";
-    case EKEYREJECTED: return "Key was rejected by service";
-    case EOWNERDEAD: return "Owner died";
-    case ENOTRECOVERABLE: return "State not recoverable";
-    case ERFKILL: return "Operation not possible due to RF-kill";
-    case EHWPOISON: return "Memory page has hardware error";
-#endif
+
     default: return "Error code: " + std::to_string(error);
     }
 }
@@ -357,7 +219,7 @@ _tls()
 }
 }
 
-Socket::Socket() :
+WindowsTcpSocket::WindowsTcpSocket() :
       port("0"),
       queue_count(0),
       max_connections(FD_SETSIZE - 1),
@@ -370,7 +232,6 @@ Socket::Socket() :
     connections.reserve(max_connections);
     // connections = std::vector<Connection*>(max_connections, new Connection());
 
-#ifdef LOSE
     int     ret;
     WSADATA wsaData;
 
@@ -379,7 +240,6 @@ Socket::Socket() :
 
         throw std::runtime_error(error.c_str());
     }
-#endif
 }
 
 Socket::~Socket() noexcept
@@ -399,7 +259,7 @@ Socket::~Socket() noexcept
 }
 
 addrinfo*
-Socket::get_addrinfo(const char* server_address)
+WindowsTcpSocket::get_addrinfo(const char* server_address)
 {
     addrinfo* server_info;
     addrinfo hints = {0};
@@ -455,31 +315,6 @@ create_pipe()
 
     std::cout << "Creating file " << tmpname << std::endl;
 
-#ifdef LINUX
-    int pipe = -1;
-
-    if(::mkfifo(tmpname, NUMBER_OF_THE_BEAST) == -1) {
-        std::string error = _get_last_error();
-
-        std::cerr << error << std::endl;
-
-        return {pipe};
-    }
-
-    pipe = ::open(tmpname, O_RDONLY | O_NONBLOCK);
-
-    if(pipe == -1) {
-        std::string error = _get_last_error();
-
-        std::cerr << error << std::endl;
-
-        return {pipe};
-    }
-
-    std::cout << "temp name : " << tmpname << std::endl;
-
-    return {pipe};
-#elif defined(LOSE)
     OVERLAPPED *overlapped = new OVERLAPPED();
     std::string pipe_name  = "\\\\.\\pipe\\server";
 
@@ -534,11 +369,10 @@ create_pipe()
     std::cout << "pipe name: " << pipe_name << std::endl;
 
     return {INVALID_SOCKET, overlapped->hEvent};
-#endif
 }
 
 void
-Socket::create_socket(addrinfo* server_info)
+WindowsTcpSocket::create_socket(addrinfo* server_info)
 {
     int bind_result = SOCKET_NOERROR;
     server_socket = INVALID_SOCKET;
@@ -552,13 +386,8 @@ Socket::create_socket(addrinfo* server_info)
 
         continue_if ((server_socket = ::socket(p->ai_family, p->ai_socktype, p->ai_protocol)) == INVALID_SOCKET);
 
-#ifdef LOSE
         static const char ONE             = '1';
         int               REUSE_PORT_ADDR = SO_REUSEADDR;
-#elif defined(LINUX)
-        static const int ONE = 1;
-        int REUSE_PORT_ADDR = SO_REUSEPORT;
-#endif
 
         is_open = true;
 
@@ -600,7 +429,7 @@ Socket::create_socket(addrinfo* server_info)
 }
 
 void
-Socket::bind(const char* server_address, const char* service)
+WindowsTcpSocket::bind(const char* server_address, const char* service)
 {
     addrinfo* server_info = nullptr;
 
@@ -622,7 +451,7 @@ Socket::bind(const char* server_address, const char* service)
 }
 
 void
-Socket::bind(const char* server_address, const unsigned short port_no)
+WindowsTcpSocket::bind(const char* server_address, const unsigned short port_no)
 {
     bind(server_address, std::to_string(port_no).c_str());
 }
@@ -630,7 +459,6 @@ Socket::bind(const char* server_address, const unsigned short port_no)
 static Connection
 _create_connection(SOCKET socket)
 {
-#ifdef LOSE
     //HANDLE ev_handle = ::CreateEvent(nullptr, true, true, nullptr);
     HANDLE ev_handle = ::WSACreateEvent();
 
@@ -653,13 +481,10 @@ _create_connection(SOCKET socket)
     }
 
     return {socket, ev_handle};
-#else
-    return {server_socket};
-#endif
 }
 
 void
-Socket::listen(const unsigned int count, event_callback callback)
+WindowsTcpSocket::listen(const unsigned int count, event_callback callback)
 {
     queue_count = count;
 
@@ -677,7 +502,7 @@ Socket::listen(const unsigned int count, event_callback callback)
 }
 
 void
-Socket::handle_connection()
+WindowsTcpSocket::handle_connection()
 {
     sockaddr_storage client_addr;
 
@@ -690,10 +515,6 @@ Socket::handle_connection()
         // todo: do not throw, just close the socket or what not
         throw std::runtime_error(error.c_str());
     }
-
-#ifdef LINUX
-    FD_SET(client, &read_list);
-#endif
 
     connections.push_back(_create_connection(client));
 
@@ -712,7 +533,7 @@ Socket::handle_connection()
 }
 
 void
-Socket::receive_data(SOCKET connection)
+WindowsTcpSocket::receive_data(SOCKET connection)
 {
     int         bytes_rx;
     std::string request;
@@ -754,7 +575,7 @@ Socket::receive_data(SOCKET connection)
 }
 
 void
-Socket::write_data(SOCKET connection)
+WindowsTcpSocket::write_data(SOCKET connection)
 {
     sockaddr_storage client_addr;
 
@@ -803,7 +624,7 @@ Socket::write_data(SOCKET connection)
 }
 
 void
-Socket::reset_socket_lists()
+WindowsTcpSocket::reset_socket_lists()
 {
     FD_ZERO(&read_list);
     FD_ZERO(&write_list);
@@ -828,7 +649,7 @@ Socket::reset_socket_lists()
 }
 
 unsigned int
-Socket::get_last_socket()
+WindowsTcpSocket::get_last_socket()
 {
     unsigned int last_socket = server_socket;
 
@@ -842,7 +663,7 @@ Socket::get_last_socket()
 }
 
 bool
-Socket::select()
+WindowsTcpSocket::select()
 {
     reset_socket_lists();
 
@@ -867,43 +688,8 @@ Socket::select()
 }
 
 void
-Socket::open()
+WindowsTcpSocket::open()
 {
-#ifdef LINUX
-    unsigned int ceiling = 0;
-
-    while (true) {
-        continue_if (select());
-
-        if (FD_ISSET(server_socket, &read_list)) {
-            if (ceiling < max_connections) {
-                handle_connection();
-                ceiling++;
-            }
-        }
-
-        for (auto& connection : connections) {
-            continue_if (connection.socket == INVALID_SOCKET
-            // || connection.socket == server_socket
-                        );
-
-            if (connection.socket != server_socket && FD_ISSET(connection.socket, &read_list)) {
-                receive_data(connection.socket);
-                // close_socket(connection.socket);
-                // connection.socket = INVALID_SOCKET;
-                // ceiling--;
-            }
-
-            if (FD_ISSET(connection.socket, &write_list)) {
-                write_data(connection.socket);
-                close_socket(connection.socket);
-                connection.socket = INVALID_SOCKET;
-                ceiling--;
-            }
-        }
-
-    }
-#else
     unsigned int ceiling = 0;
 
     while (true) {
@@ -981,11 +767,10 @@ Socket::open()
             }
         }
     }
-#endif
 }
 
 void
-Socket::close()
+WindowsTcpSocket::close()
 {
     close_socket(server_socket);
 
@@ -993,21 +778,13 @@ Socket::close()
 }
 
 void
-Socket::close_socket(SOCKET s)
+WindowsTcpSocket::close_socket(SOCKET s)
 {
-#ifdef LOSE
     int shutdown_result = ::shutdown(s, SD_BOTH);
 
     if (shutdown_result == SOCKET_ERROR && ::WSAGetLastError() == WSAENOTCONN) {
         shutdown_result = SOCKET_NOERROR;
     }
-#elif defined(LINUX)
-    int shutdown_result = ::shutdown(s, SHUT_RDWR);
-
-    if(shutdown_result == SOCKET_ERROR && errno == ENOTCONN) {
-        shutdown_result = SOCKET_NOERROR;
-    }
-#endif
 
     if (shutdown_result == SOCKET_ERROR) {
         std::string error = _get_last_error("Failed to shutdown connection.");
@@ -1016,9 +793,5 @@ Socket::close_socket(SOCKET s)
         // throw std::runtime_error(error.c_str());
     }
 
-#ifdef LOSE
     ::closesocket(s);
-#elif defined(LINUX)
-    ::close(s);
-#endif
 }

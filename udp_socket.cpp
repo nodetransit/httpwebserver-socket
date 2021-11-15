@@ -2,7 +2,12 @@
 
 using namespace nt::http;
 
-UdpSocket::UdpSocket() : Socket(),
+UdpSocket::UdpSocket() :
+#ifdef LINUX
+      LinuxTcpSocket(),
+#else
+      WindowsTcpSocket(),
+#endif
     protocol(IPPROTO_UDP)
 {
 }
