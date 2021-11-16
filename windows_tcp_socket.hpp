@@ -37,8 +37,8 @@ protected:
     int protocol;
 
 public:
-    Socket();
-    ~Socket() noexcept;
+    WindowsTcpSocket();
+    ~WindowsTcpSocket() noexcept;
 
     void bind(const char*, const char*);
     void bind(const char*, const unsigned short);

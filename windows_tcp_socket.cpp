@@ -242,7 +242,7 @@ WindowsTcpSocket::WindowsTcpSocket() :
     }
 }
 
-Socket::~Socket() noexcept
+WindowsTcpSocket::~WindowsTcpSocket() noexcept
 {
     if (is_open) {
         close();

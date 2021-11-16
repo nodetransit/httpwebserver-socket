@@ -17,7 +17,7 @@ class __HttpWebServerSocketPort__ TcpSocket :
 #ifdef LINUX
       public nt::http::LinuxTcpSocket
 #else
-      public nt::http:WindowsTcpSocket:
+      public nt::http::WindowsTcpSocket
 #endif
 {
 protected:
