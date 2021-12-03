@@ -224,8 +224,7 @@ WindowsTcpSocket::WindowsTcpSocket() :
       queue_count(0),
       max_connections(FD_SETSIZE - 1),
       server_socket(0),
-      is_open(false),
-      protocol(0)
+      is_open(false)
 {
     _tls();
 

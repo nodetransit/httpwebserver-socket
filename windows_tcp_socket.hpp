@@ -1,5 +1,5 @@
-#ifndef HTTPWEBSERVER_WINDOWS_SOCKET_HPP__
-#define HTTPWEBSERVER_WINDOWS_SOCKET_HPP__
+#ifndef HTTPWEBSERVER_WINDOWS_TCP_SOCKET_HPP__
+#define HTTPWEBSERVER_WINDOWS_TCP_SOCKET_HPP__
 
 #include <string>
 #include <vector>
@@ -10,6 +10,7 @@
 #include "interfaces/socket.hpp"
 #include "connection.hpp"
 #include "timeval.hpp"
+#include "tcp_socket_common.hpp"
 
 namespace nt { namespace http {
 
@@ -18,6 +19,8 @@ typedef void (* event_callback)(void*, void*);
 class __HttpWebServerSocketPort__ WindowsTcpSocket :
       public nt::http::interfaces::Socket
 {
+    friend class TcpSocketCommon;
+
 private:
     std::string        port;
     unsigned int       queue_count;
@@ -60,4 +63,4 @@ private:
 
 }}
 
-#endif /* HTTPWEBSERVER_WINDOWS_SOCKET_HPP__ */
+#endif /* HTTPWEBSERVER_WINDOWS_TCP_SOCKET_HPP__ */

@@ -113,6 +113,7 @@ set (SOURCE_FILES "interfaces/socket.cpp"
                   "timeval.cpp"
                   "connection.cpp"
                   "tcp_socket.cpp"
+                  "tcp_socket_common.cpp"
                   "udp_socket.cpp")
 if (LOSE)
     list (APPEND SOURCE_FILES "manifest.rc"

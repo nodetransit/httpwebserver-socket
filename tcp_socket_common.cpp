@@ -15,22 +15,22 @@
 
 using namespace nt::http;
 
-
 addrinfo*
-TcpSocketCommon::get_addrinfo(const char* server_address)
+TcpSocketCommon::get_addrinfo(TcpSocket* tcp, const char* server_address)
 {
     addrinfo* server_info;
     addrinfo hints = {0};
 
     hints.ai_family   = AF_UNSPEC;
     hints.ai_socktype = SOCK_STREAM;
-    hints.ai_protocol = protocol; // 0 = ANY
+    hints.ai_protocol = IPPROTO_TCP;
     hints.ai_flags    = AI_PASSIVE;
 
     int result = 0;
 
-    if ((result = ::getaddrinfo(server_address, port.c_str(), &hints, &server_info)) != SOCKET_NOERROR) {
-        std::string error = _get_last_error("Failed to get information about the specified network port/service '" + port + "'.");
+    if ((result = ::getaddrinfo(server_address, tcp->port.c_str(), &hints, &server_info)) != SOCKET_NOERROR) {
+        // std::string error = _get_last_error("Failed to get information about the specified network port/service '" + tcp->port + "'.");
+        std::string error = "Failed to get information about the specified network port/service '" + tcp->port + "'.";
 
         throw std::runtime_error(error.c_str());
     }
@@ -40,7 +40,7 @@ TcpSocketCommon::get_addrinfo(const char* server_address)
 }
 
 void
-TcpSocketCommon::bind(const char* server_address, const char* service)
+TcpSocketCommon::bind(TcpSocket* tcp, const char* server_address, const char* service)
 {
     addrinfo* server_info = nullptr;
 
@@ -50,37 +50,38 @@ TcpSocketCommon::bind(const char* server_address, const char* service)
               }
     _____________________________________________________________;
 
-    port = service;
+    tcp->port = service;
 
-    server_info = get_addrinfo(server_address);
+    server_info = get_addrinfo(tcp, server_address);
 
-    Connection pipe = create_pipe();
-
-    connections.push_back(pipe);
-
-    create_socket(server_info);
+    // Connection pipe = create_pipe();
+    //
+    // connections.push_back(pipe);
+    //
+    // create_socket(server_info);
 }
 
 void
-TcpSocketCommon::bind(const char* server_address, const unsigned short port_no)
+TcpSocketCommon::bind(TcpSocket* tcp, const char* server_address, const unsigned short port_no)
 {
-    bind(server_address, std::to_string(port_no).c_str());
+    bind(tcp, server_address, std::to_string(port_no).c_str());
 }
 
 void
-TcpSocketCommon::listen(const unsigned int count, event_callback callback)
+TcpSocketCommon::listen(TcpSocket* tcp, const unsigned int count, event_callback callback)
 {
-    queue_count = count;
+    // queue_count = count;
 
-    int listen_result = ::listen(server_socket, queue_count);
+    int listen_result = ::listen(tcp->server_socket, tcp->queue_count);
 
     if (listen_result == SOCKET_ERROR) {
-        std::string error = _get_last_error("Failed to listen to port/service " + port + ".");
+        // std::string error = _get_last_error("Failed to listen to port/service " + t.port + ".");
+        std::string error = "Failed to listen to port/service " + tcp->port + ".";
 
-        close_socket(server_socket);
+        // close_socket(t.server_socket);
 
         throw std::runtime_error(error.c_str());
     }
 
-    connections.push_back(_create_connection(server_socket));
+    // connections.push_back(_create_connection(server_socket));
 }

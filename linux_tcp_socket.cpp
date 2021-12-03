@@ -178,8 +178,7 @@ LinuxTcpSocket::LinuxTcpSocket() :
       queue_count(0),
       max_connections(FD_SETSIZE - 1),
       server_socket(0),
-      is_open(false),
-      protocol(0)
+      is_open(false)
 {
     connections.reserve(max_connections);
 }
@@ -199,7 +198,7 @@ LinuxTcpSocket::get_addrinfo(const char* server_address)
 
     hints.ai_family   = AF_UNSPEC;
     hints.ai_socktype = SOCK_STREAM;
-    hints.ai_protocol = protocol; // 0 = ANY
+    hints.ai_protocol = IPPROTO_TCP;
     hints.ai_flags    = AI_PASSIVE;
 
     int result = 0;

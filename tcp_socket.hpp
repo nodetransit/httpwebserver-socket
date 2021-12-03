@@ -20,9 +20,6 @@ class __HttpWebServerSocketPort__ TcpSocket :
       public nt::http::WindowsTcpSocket
 #endif
 {
-protected:
-    int protocol;
-
 public:
     TcpSocket();
 };

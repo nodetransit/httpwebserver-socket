@@ -11,11 +11,10 @@ using namespace nt::http;
 
 TcpSocket::TcpSocket() :
 #ifdef LINUX
-      LinuxTcpSocket(),
+      LinuxTcpSocket()
 #else
-      WindowsTcpSocket(),
+      WindowsTcpSocket()
 #endif
-    protocol(IPPROTO_TCP)
 {
 }
 
