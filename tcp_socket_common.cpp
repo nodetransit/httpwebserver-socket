@@ -11,12 +11,19 @@
 
 #include <utility/socket.hpp>
 
-#include "tcp_socket_common.hpp"
+#include "windows_tcp_socket.hpp"
 
 using namespace nt::http;
 
+
+#ifdef LINUX
+#    define HWS_TCP_SOCKET_COMMON LinuxTcpSocket;
+#else
+#    define HWS_TCP_SOCKET_COMMON WindowsTcpSocket
+#endif
+
 addrinfo*
-TcpSocketCommon::get_addrinfo(TcpSocket* tcp, const char* server_address)
+HWS_TCP_SOCKET_COMMON::get_addrinfo(const char* server_address)
 {
     addrinfo* server_info;
     addrinfo hints = {0};
@@ -28,9 +35,8 @@ TcpSocketCommon::get_addrinfo(TcpSocket* tcp, const char* server_address)
 
     int result = 0;
 
-    if ((result = ::getaddrinfo(server_address, tcp->port.c_str(), &hints, &server_info)) != SOCKET_NOERROR) {
-        // std::string error = _get_last_error("Failed to get information about the specified network port/service '" + tcp->port + "'.");
-        std::string error = "Failed to get information about the specified network port/service '" + tcp->port + "'.";
+    if ((result = ::getaddrinfo(server_address, port.c_str(), &hints, &server_info)) != SOCKET_NOERROR) {
+        std::string error = _get_last_error("Failed to get information about the specified network port/service '" + port + "'.");
 
         throw std::runtime_error(error.c_str());
     }
@@ -40,7 +46,7 @@ TcpSocketCommon::get_addrinfo(TcpSocket* tcp, const char* server_address)
 }
 
 void
-TcpSocketCommon::bind(TcpSocket* tcp, const char* server_address, const char* service)
+HWS_TCP_SOCKET_COMMON::bind(const char* server_address, const char* service)
 {
     addrinfo* server_info = nullptr;
 
@@ -50,38 +56,39 @@ TcpSocketCommon::bind(TcpSocket* tcp, const char* server_address, const char* se
               }
     _____________________________________________________________;
 
-    tcp->port = service;
+    port = service;
 
-    server_info = get_addrinfo(tcp, server_address);
+    server_info = get_addrinfo(server_address);
 
     // Connection pipe = create_pipe();
-    //
+
     // connections.push_back(pipe);
-    //
-    // create_socket(server_info);
+
+    create_socket(server_info);
 }
 
 void
-TcpSocketCommon::bind(TcpSocket* tcp, const char* server_address, const unsigned short port_no)
+HWS_TCP_SOCKET_COMMON::bind(const char* server_address, const unsigned short port_no)
 {
-    bind(tcp, server_address, std::to_string(port_no).c_str());
+    bind(server_address, std::to_string(port_no).c_str());
 }
 
 void
-TcpSocketCommon::listen(TcpSocket* tcp, const unsigned int count, event_callback callback)
+HWS_TCP_SOCKET_COMMON::listen(const unsigned int count, event_callback callback)
 {
-    // queue_count = count;
+    queue_count = count;
 
-    int listen_result = ::listen(tcp->server_socket, tcp->queue_count);
+    int listen_result = ::listen(server_socket, queue_count);
 
     if (listen_result == SOCKET_ERROR) {
-        // std::string error = _get_last_error("Failed to listen to port/service " + t.port + ".");
-        std::string error = "Failed to listen to port/service " + tcp->port + ".";
+        std::string error = _get_last_error("Failed to listen to port/service " + port + ".");
 
-        // close_socket(t.server_socket);
+        close_socket(server_socket);
 
         throw std::runtime_error(error.c_str());
     }
 
-    // connections.push_back(_create_connection(server_socket));
+    connections.push_back(HWS_TCP_SOCKET_COMMON::_create_connection(server_socket));
 }
+
+#undef HWS_TCP_SOCKET_COMMON

@@ -10,7 +10,6 @@
 #include "interfaces/socket.hpp"
 #include "connection.hpp"
 #include "timeval.hpp"
-#include "tcp_socket_common.hpp"
 
 namespace nt { namespace http {
 
@@ -19,8 +18,6 @@ typedef void (* event_callback)(void*, void*);
 class __HttpWebServerSocketPort__ WindowsTcpSocket :
       public nt::http::interfaces::Socket
 {
-    friend class TcpSocketCommon;
-
 private:
     std::string        port;
     unsigned int       queue_count;
@@ -49,6 +46,12 @@ public:
     void open();
     void close();
 
+    static std::string _get_last_error();
+    static std::string _get_last_error(const std::string&);
+    static std::string _get_last_error_message(int);
+    static std::string _get_last_error_message();
+    static Connection _create_connection(SOCKET);
+
 private:
     addrinfo* get_addrinfo(const char*);
     void create_socket(addrinfo*);
@@ -59,8 +62,10 @@ private:
     void handle_connection();
     void receive_data(SOCKET);
     void write_data(SOCKET);
+
 };
 
 }}
 
 #endif /* HTTPWEBSERVER_WINDOWS_TCP_SOCKET_HPP__ */
+
