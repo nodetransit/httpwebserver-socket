@@ -29,9 +29,6 @@ private:
     bool is_open;
 
     std::vector<Connection> connections;
-    fd_set                  read_list;
-    fd_set                  write_list;
-    fd_set                  error_list;
 
 protected:
     int protocol;

@@ -614,7 +614,6 @@ WindowsTcpSocket::write_data(SOCKET connection)
     ::free(hostname);
     ::send(connection, response.c_str(), response.size(), 0);
     // close_socket(connection);
-    FD_CLR(connection, &write_list);
 
 #ifdef HTTP_WEB_SERVER_SOCKET_DEBUG
     std::cout << "writing response"
@@ -626,10 +625,6 @@ WindowsTcpSocket::write_data(SOCKET connection)
 void
 WindowsTcpSocket::reset_socket_lists()
 {
-    FD_ZERO(&read_list);
-    FD_ZERO(&write_list);
-    // FD_ZERO(&error_list);
-
     auto closed = [](const Connection& c) {
         return c.socket == INVALID_SOCKET;
     };
@@ -641,10 +636,6 @@ WindowsTcpSocket::reset_socket_lists()
 
     for (auto& connection: connections) {
         // continue_if(connection.socket == INVALID_SOCKET);
-
-        FD_SET(connection.socket, &read_list);
-        FD_SET(connection.socket, &write_list);
-        // FD_SET(connection->socket, &error_list);
     }
 }
 
@@ -676,15 +667,7 @@ WindowsTcpSocket::select()
     std::cout << "selecting from " << connections.size() << " connection(s)\n";
 #endif
 
-    if ((select_result = ::select(last_socket + 1, &read_list, &write_list, nullptr, timeout)) == SOCKET_ERROR) {
-        std::string error = _get_last_error("Failed to poll connections.");
-
-        close_socket(server_socket);
-
-        throw std::runtime_error(error.c_str());
-    }
-
-    return select_result == 0;
+    return true;
 }
 
 void
