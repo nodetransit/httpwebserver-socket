@@ -46,12 +46,6 @@ public:
     void open();
     void close();
 
-    static std::string _get_last_error();
-    static std::string _get_last_error(const std::string&);
-    static std::string _get_last_error_message(int);
-    static std::string _get_last_error_message();
-    static Connection _create_connection(SOCKET);
-
 private:
     addrinfo* get_addrinfo(const char*);
     void create_socket(addrinfo*);

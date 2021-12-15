@@ -19,98 +19,8 @@ using namespace nt::http;
 namespace {
 const unsigned int NUMBER_OF_THE_BEAST = 0600;
 
-std::unique_ptr<HANDLE[]>
-_get_connection_handles(const std::vector<Connection> &connections)
-{
-    auto handles = std::make_unique<HANDLE[]>(connections.size());
-
-    int i = 0;
-    for (auto &connection : connections) {
-        handles[i++] = connection.event;
-    }
-
-    return handles;
-}
-
-static Connection*
-_find_connection_by_event_handle(const std::vector<Connection> &connections, HANDLE handle)
-{
-    for (auto &connection : connections) {
-        if (connection.event == handle) {
-            return const_cast<Connection*>(&connection);
-        }
-    }
-
-    return nullptr;
-}
-
-void
-_tls()
-{
-    tls       * tls;
-    tls_config* tls_config;
-
-    if (tls_init() != 0) {
-        printf("tls_init() failed\n");
-        return;
-    }
-
-    if ((tls = tls_server()) == nullptr) {
-        printf("tls_server() failed\n");
-        return;
-    }
-
-    if ((tls_config = tls_config_new()) == nullptr) {
-        printf("tls_config_new() failed\n");
-        return;
-    }
-
-    tls_close(tls);
-    tls_free(tls);
-    tls_config_free(tls_config);
-}
-}
-
-WindowsTcpSocket::WindowsTcpSocket() :
-      port("0"),
-      queue_count(0),
-      max_connections(FD_SETSIZE - 1),
-      server_socket(0),
-      is_open(false)
-{
-    _tls();
-
-    connections.reserve(max_connections);
-    // connections = std::vector<Connection*>(max_connections, new Connection());
-
-    int     ret;
-    WSADATA wsaData;
-
-    if ((ret = ::WSAStartup(MAKEWORD(2, 2), &wsaData)) != 0) {
-        std::string error = _get_last_error("Failed to start up.");
-
-        throw std::runtime_error(error.c_str());
-    }
-}
-
-WindowsTcpSocket::~WindowsTcpSocket() noexcept
-{
-    if (is_open) {
-        close();
-    }
-
-#ifdef LOSE
-    if (::WSACleanup() == SOCKET_ERROR) {
-        std::string error = _get_last_error("Failed to clean up.");
-
-        std::cerr << error << std::endl;
-        // throw std::runtime_error(error.c_str());
-    }
-#endif
-}
-
-std::string
-WindowsTcpSocket::_get_last_error()
+const std::string
+_get_last_error()
 {
     int error = ::WSAGetLastError();
 
@@ -221,14 +131,15 @@ WindowsTcpSocket::_get_last_error()
     }
 }
 
-std::string
-WindowsTcpSocket::_get_last_error(const std::string& prefix)
+const std::string
+_get_last_error(const std::string& prefix)
 {
     return prefix + " " + _get_last_error();
 }
 
-std::string
-WindowsTcpSocket::_get_last_error_message(int error)
+#ifdef LOSE
+const std::string
+_get_last_error_message(int error)
 {
     LPTSTR buffer;
 
@@ -247,12 +158,127 @@ WindowsTcpSocket::_get_last_error_message(int error)
     return message;
 }
 
-std::string
-WindowsTcpSocket::_get_last_error_message()
+const std::string
+_get_last_error_message()
 {
     int error = ::GetLastError();
 
     return _get_last_error_message(error);
+}
+
+std::unique_ptr<HANDLE[]>
+_get_connection_handles(const std::vector<Connection> &connections)
+{
+    auto handles = std::make_unique<HANDLE[]>(connections.size());
+
+    int i = 0;
+    for (auto &connection : connections) {
+        handles[i++] = connection.event;
+    }
+
+    return handles;
+}
+
+static Connection*
+_find_connection_by_event_handle(const std::vector<Connection> &connections, HANDLE handle)
+{
+    for (auto &connection : connections) {
+        if (connection.event == handle) {
+            return const_cast<Connection*>(&connection);
+        }
+    }
+
+    return nullptr;
+}
+#endif
+
+void
+_tls()
+{
+    tls       * tls;
+    tls_config* tls_config;
+
+    if (tls_init() != 0) {
+        printf("tls_init() failed\n");
+        return;
+    }
+
+    if ((tls = tls_server()) == nullptr) {
+        printf("tls_server() failed\n");
+        return;
+    }
+
+    if ((tls_config = tls_config_new()) == nullptr) {
+        printf("tls_config_new() failed\n");
+        return;
+    }
+
+    tls_close(tls);
+    tls_free(tls);
+    tls_config_free(tls_config);
+}
+}
+
+WindowsTcpSocket::WindowsTcpSocket() :
+      port("0"),
+      queue_count(0),
+      max_connections(FD_SETSIZE - 1),
+      server_socket(0),
+      is_open(false),
+      protocol(0)
+{
+    _tls();
+
+    connections.reserve(max_connections);
+    // connections = std::vector<Connection*>(max_connections, new Connection());
+
+    int     ret;
+    WSADATA wsaData;
+
+    if ((ret = ::WSAStartup(MAKEWORD(2, 2), &wsaData)) != 0) {
+        std::string error = _get_last_error("Failed to start up.");
+
+        throw std::runtime_error(error.c_str());
+    }
+}
+
+WindowsTcpSocket::~WindowsTcpSocket() noexcept
+{
+    if (is_open) {
+        close();
+    }
+
+#ifdef LOSE
+    if (::WSACleanup() == SOCKET_ERROR) {
+        std::string error = _get_last_error("Failed to clean up.");
+
+        std::cerr << error << std::endl;
+        // throw std::runtime_error(error.c_str());
+    }
+#endif
+}
+
+addrinfo*
+WindowsTcpSocket::get_addrinfo(const char* server_address)
+{
+    addrinfo* server_info;
+    addrinfo hints = {0};
+
+    hints.ai_family   = AF_UNSPEC;
+    hints.ai_socktype = SOCK_STREAM;
+    hints.ai_protocol = protocol; // 0 = ANY
+    hints.ai_flags    = AI_PASSIVE;
+
+    int result = 0;
+
+    if ((result = ::getaddrinfo(server_address, port.c_str(), &hints, &server_info)) != SOCKET_NOERROR) {
+        std::string error = _get_last_error("Failed to get information about the specified network port/service '" + port + "'.");
+
+        throw std::runtime_error(error.c_str());
+    }
+
+
+    return server_info;
 }
 
 static Connection
@@ -300,7 +326,7 @@ create_pipe()
 
     if (pipe == nullptr || pipe == INVALID_HANDLE_VALUE) {
         std::cout << "Failed to create outbound pipe instance. "
-                  << WindowsTcpSocket::_get_last_error_message()
+                  << _get_last_error_message()
                   << std::endl;
         return {INVALID_SOCKET};
     }
@@ -308,7 +334,7 @@ create_pipe()
     overlapped->hEvent = ::CreateEvent(nullptr, true, true, nullptr);
     if (overlapped->hEvent == nullptr) {
         std::cout << "Failed to create event. "
-                  << WindowsTcpSocket::_get_last_error_message()
+                  << _get_last_error_message()
                   << std::endl;
         return {INVALID_SOCKET};
     }
@@ -332,7 +358,7 @@ create_pipe()
 
         default: { // If an error occurs during the connect operation...
             std::cout << "Failed to make connection on named pipe. "
-                      << WindowsTcpSocket::_get_last_error_message(error)
+                      << _get_last_error_message(error)
                       << std::endl;
             ::CloseHandle(pipe);
             return {INVALID_SOCKET};
@@ -402,8 +428,36 @@ WindowsTcpSocket::create_socket(addrinfo* server_info)
     is_open = true;
 }
 
-Connection
-WindowsTcpSocket::_create_connection(SOCKET socket)
+void
+WindowsTcpSocket::bind(const char* server_address, const char* service)
+{
+    addrinfo* server_info = nullptr;
+
+    ______________________________________________________________
+              if (server_info != nullptr) {
+                  freeaddrinfo(server_info);
+              }
+    _____________________________________________________________;
+
+    port = service;
+
+    server_info = get_addrinfo(server_address);
+
+    Connection pipe = create_pipe();
+
+    connections.push_back(pipe);
+
+    create_socket(server_info);
+}
+
+void
+WindowsTcpSocket::bind(const char* server_address, const unsigned short port_no)
+{
+    bind(server_address, std::to_string(port_no).c_str());
+}
+
+static Connection
+_create_connection(SOCKET socket)
 {
     //HANDLE ev_handle = ::CreateEvent(nullptr, true, true, nullptr);
     HANDLE ev_handle = ::WSACreateEvent();
@@ -421,12 +475,30 @@ WindowsTcpSocket::_create_connection(SOCKET socket)
                                          FD_ACCEPT | FD_WRITE | FD_CLOSE);
 
     if (select_result == SOCKET_ERROR) {
-        std::string error = WindowsTcpSocket::_get_last_error("Failed to select WSA event.");
+        std::string error = _get_last_error("Failed to select WSA event.");
 
         throw std::runtime_error(error.c_str());
     }
 
     return {socket, ev_handle};
+}
+
+void
+WindowsTcpSocket::listen(const unsigned int count, event_callback callback)
+{
+    queue_count = count;
+
+    int listen_result = ::listen(server_socket, queue_count);
+
+    if (listen_result == SOCKET_ERROR) {
+        std::string error = _get_last_error("Failed to listen to port/service " + port + ".");
+
+        close_socket(server_socket);
+
+        throw std::runtime_error(error.c_str());
+    }
+
+    connections.push_back(_create_connection(server_socket));
 }
 
 void
