@@ -3,7 +3,8 @@
 using namespace nt::http;
 
 Connection::Connection(const SOCKET n) :
-      socket(n)
+      socket(n),
+      name("")
 {
 }
 
@@ -14,3 +15,22 @@ Connection::Connection(const SOCKET n, const HANDLE h) :
 {
 }
 #endif
+
+namespace nt { namespace  http {
+
+std::ostream&
+operator<<(std::ostream& out, const Connection& con)
+{
+    out << "Connection";
+
+    if (!con.name.empty()) {
+        out << " \"" << con.name << "\"";
+
+    }
+
+    out << " (" << static_cast<int>(con.socket) << ")";
+
+    return out;
+}
+
+}};

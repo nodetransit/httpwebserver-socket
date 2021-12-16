@@ -12,12 +12,15 @@ public:
 #ifdef LOSE
     HANDLE  event;
 #endif
+    std::string name;
 
     Connection() = default;
     Connection(const SOCKET);
 #ifdef LOSE
     Connection(const SOCKET, const HANDLE);
 #endif
+
+    friend std::ostream& operator<<(std::ostream&, const Connection&);
 };
 
 }}

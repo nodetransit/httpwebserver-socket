@@ -444,6 +444,7 @@ WindowsTcpSocket::bind(const char* server_address, const char* service)
     server_info = get_addrinfo(server_address);
 
     Connection pipe = create_pipe();
+    pipe.name = "pipe";
 
     connections.push_back(pipe);
 
@@ -703,6 +704,8 @@ WindowsTcpSocket::open()
             HANDLE ev_handle = handles.get()[index];
 
             Connection* cx = _find_connection_by_event_handle(connections, ev_handle);
+
+            std::cout << *cx << std::endl;
 
             if (cx != nullptr) {
                 sockaddr_storage client_addr;
