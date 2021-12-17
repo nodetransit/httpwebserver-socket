@@ -9,9 +9,18 @@ class Connection
 {
 public:
     SOCKET socket;
+#ifdef LOSE
+    HANDLE  event;
+#endif
+    std::string name;
 
     Connection() = default;
-    Connection(const int);
+    Connection(const SOCKET);
+#ifdef LOSE
+    Connection(const SOCKET, const HANDLE);
+#endif
+
+    friend std::ostream& operator<<(std::ostream&, const Connection&);
 };
 
 }}

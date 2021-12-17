@@ -4,7 +4,6 @@
 #include <memory>
 #include <algorithm>
 #include <tinythread.h>
-#include <tls.h>
 
 #include <macros/leave_loop_if.hpp>
 #include <macros/scope_guard.hpp>
@@ -12,118 +11,19 @@
 
 #include <utility/socket.hpp>
 
-#include "socket.hpp"
+#include "linux_tcp_socket.hpp"
 
 using namespace nt::http;
 
 namespace {
+const unsigned int NUMBER_OF_THE_BEAST = 0600;
+
 const std::string
 _get_last_error()
 {
-#ifdef LOSE
-    int error = ::WSAGetLastError();
-#elif defined(LINUX)
     int error = errno;
-#endif
 
     switch (error) {
-#ifdef LOSE
-    case WSA_INVALID_HANDLE: return "Specified event object handle is invalid.";
-    case WSA_NOT_ENOUGH_MEMORY: return "Insufficient memory available.";
-    case WSA_INVALID_PARAMETER: return "One or more parameters are invalid.";
-    case WSA_OPERATION_ABORTED: return "Overlapped operation aborted.";
-    case WSA_IO_INCOMPLETE: return "Overlapped I/O event object not in signaled state.";
-    case WSA_IO_PENDING: return "Overlapped operations will complete later.";
-    case WSAEINTR: return "Interrupted function call.";
-    case WSAEBADF: return "File handle is not valid.";
-    case WSAEACCES: return "Permission denied.";
-    case WSAEFAULT: return "Bad address.";
-    case WSAEINVAL: return "Invalid argument.";
-    case WSAEMFILE: return "Too many open files.";
-    case WSAEWOULDBLOCK: return "Resource temporarily unavailable.";
-    case WSAEINPROGRESS: return "Operation now in progress.";
-    case WSAEALREADY: return "Operation already in progress.";
-    case WSAENOTSOCK: return "Socket operation on nonsocket.";
-    case WSAEDESTADDRREQ: return "Destination address required.";
-    case WSAEMSGSIZE: return "Message too long.";
-    case WSAEPROTOTYPE: return "Protocol wrong type for socket.";
-    case WSAENOPROTOOPT: return "Bad protocol option.";
-    case WSAEPROTONOSUPPORT: return "Protocol not supported.";
-    case WSAESOCKTNOSUPPORT: return "Socket type not supported.";
-    case WSAEOPNOTSUPP: return "Operation not supported.";
-    case WSAEPFNOSUPPORT: return "Protocol family not supported.";
-    case WSAEAFNOSUPPORT: return "Address family not supported by protocol family.";
-    case WSAEADDRINUSE: return "Address already in use.";
-    case WSAEADDRNOTAVAIL: return "Cannot assign requested address.";
-    case WSAENETDOWN: return "Network is down.";
-    case WSAENETUNREACH: return "Network is unreachable.";
-    case WSAENETRESET: return "Network dropped connection on reset.";
-    case WSAECONNABORTED: return "Software caused connection abort.";
-    case WSAECONNRESET: return "Connection reset by peer.";
-    case WSAENOBUFS: return "No buffer space available.";
-    case WSAEISCONN: return "Socket is already connected.";
-    case WSAENOTCONN: return "Socket is not connected.";
-    case WSAESHUTDOWN: return "Cannot send after socket shutdown.";
-    case WSAETOOMANYREFS: return "Too many references.";
-    case WSAETIMEDOUT: return "Connection timed out.";
-    case WSAECONNREFUSED: return "Connection refused.";
-    case WSAELOOP: return "Cannot translate name.";
-    case WSAENAMETOOLONG: return "Name too long.";
-    case WSAEHOSTDOWN: return "Host is down.";
-    case WSAEHOSTUNREACH: return "No route to host.";
-    case WSAENOTEMPTY: return "Directory not empty.";
-    case WSAEPROCLIM: return "Too many processes.";
-    case WSAEUSERS: return "User quota exceeded.";
-    case WSAEDQUOT: return "Disk quota exceeded.";
-    case WSAESTALE: return "Stale file handle reference.";
-    case WSAEREMOTE: return "Item is remote.";
-    case WSASYSNOTREADY: return "Network subsystem is unavailable.";
-    case WSAVERNOTSUPPORTED: return "Winsock.dll version out of range.";
-    case WSANOTINITIALISED: return "Successful WSAStartup not yet performed.";
-    case WSAEDISCON: return "Graceful shutdown in progress.";
-    case WSAENOMORE: return "No more results.";
-    case WSAECANCELLED: return "Call has been canceled.";
-    case WSAEINVALIDPROCTABLE: return "Procedure call table is invalid.";
-    case WSAEINVALIDPROVIDER: return "Service provider is invalid.";
-    case WSAEPROVIDERFAILEDINIT: return "Service provider failed to initialize.";
-    case WSASYSCALLFAILURE: return "System call failure.";
-    case WSASERVICE_NOT_FOUND: return "Service not found.";
-    case WSATYPE_NOT_FOUND: return "Class type not found.";
-    case WSA_E_NO_MORE: return "No more results.";
-    case WSA_E_CANCELLED: return "Call was canceled.";
-    case WSAEREFUSED: return "Database query was refused.";
-    case WSAHOST_NOT_FOUND: return "Host not found.";
-    case WSATRY_AGAIN: return "Nonauthoritative host not found.";
-    case WSANO_RECOVERY: return "This is a nonrecoverable error.";
-    case WSANO_DATA: return "Valid name, no data record of requested type.";
-    case WSA_QOS_RECEIVERS: return "QoS receivers.";
-    case WSA_QOS_SENDERS: return "QoS senders.";
-    case WSA_QOS_NO_SENDERS: return "No QoS senders.";
-    case WSA_QOS_NO_RECEIVERS: return "QoS no receivers.";
-    case WSA_QOS_REQUEST_CONFIRMED: return "QoS request confirmed.";
-    case WSA_QOS_ADMISSION_FAILURE: return "QoS admission error.";
-    case WSA_QOS_POLICY_FAILURE: return "QoS policy failure.";
-    case WSA_QOS_BAD_STYLE: return "QoS bad style.";
-    case WSA_QOS_BAD_OBJECT: return "QoS bad object.";
-    case WSA_QOS_TRAFFIC_CTRL_ERROR: return "QoS traffic control error.";
-    case WSA_QOS_GENERIC_ERROR: return "QoS generic error.";
-    case WSA_QOS_ESERVICETYPE: return "QoS service type error.";
-    case WSA_QOS_EFLOWSPEC: return "QoS flowspec error.";
-    case WSA_QOS_EPROVSPECBUF: return "Invalid QoS provider buffer.";
-    case WSA_QOS_EFILTERSTYLE: return "Invalid QoS filter style.";
-    case WSA_QOS_EFILTERTYPE: return "Invalid QoS filter type.";
-    case WSA_QOS_EFILTERCOUNT: return "Incorrect QoS filter count.";
-    case WSA_QOS_EOBJLENGTH: return "Invalid QoS object length.";
-    case WSA_QOS_EFLOWCOUNT: return "Incorrect QoS flow count.";
-    case WSA_QOS_EUNKOWNPSOBJ: return "Unrecognized QoS object.";
-    case WSA_QOS_EPOLICYOBJ: return "Invalid QoS policy object.";
-    case WSA_QOS_EFLOWDESC: return "Invalid QoS flow descriptor.";
-    case WSA_QOS_EPSFLOWSPEC: return "Invalid QoS provider-specific flowspec.";
-    case WSA_QOS_EPSFILTERSPEC: return "Invalid QoS provider-specific filterspec.";
-    case WSA_QOS_ESDMODEOBJ: return "Invalid QoS shape discard mode object.";
-    case WSA_QOS_ESHAPERATEOBJ: return "Invalid QoS shaping rate object.";
-    case WSA_QOS_RESERVED_PETYPE: return "Reserved policy QoS element type.";
-#elif defined(LINUX)
     case EPERM: return "Operation not permitted";
     case ENOENT: return "No such file or directory";
     case ESRCH: return "No such process";
@@ -256,7 +156,6 @@ _get_last_error()
     case ENOTRECOVERABLE: return "State not recoverable";
     case ERFKILL: return "Operation not possible due to RF-kill";
     case EHWPOISON: return "Memory page has hardware error";
-#endif
     default: return "Error code: " + std::to_string(error);
     }
 }
@@ -267,83 +166,39 @@ _get_last_error(const std::string& prefix)
     return prefix + " " + _get_last_error();
 }
 
-void
-_tls()
+Connection
+_create_connection(SOCKET socket)
 {
-    tls       * tls;
-    tls_config* tls_config;
-
-    if (tls_init() != 0) {
-        printf("tls_init() failed\n");
-        return;
-    }
-
-    if ((tls = tls_server()) == nullptr) {
-        printf("tls_server() failed\n");
-        return;
-    }
-
-    if ((tls_config = tls_config_new()) == nullptr) {
-        printf("tls_config_new() failed\n");
-        return;
-    }
-
-    tls_close(tls);
-    tls_free(tls);
-    tls_config_free(tls_config);
+    return {socket};
 }
 }
 
-Socket::Socket() :
+LinuxTcpSocket::LinuxTcpSocket() :
       port("0"),
       queue_count(0),
       max_connections(FD_SETSIZE - 1),
       server_socket(0),
-      is_open(false),
-      protocol(0)
+      is_open(false)
 {
-    _tls();
-
     connections.reserve(max_connections);
-    // connections = std::vector<Connection*>(max_connections, new Connection());
-
-#ifdef LOSE
-    int     ret;
-    WSADATA wsaData;
-
-    if ((ret = ::WSAStartup(MAKEWORD(2, 2), &wsaData)) != 0) {
-        std::string error = _get_last_error("Failed to start up.");
-
-        throw std::runtime_error(error.c_str());
-    }
-#endif
 }
 
-Socket::~Socket() noexcept
+LinuxTcpSocket::~LinuxTcpSocket() noexcept
 {
     if (is_open) {
         close();
     }
-
-#ifdef LOSE
-    if (::WSACleanup() == SOCKET_ERROR) {
-        std::string error = _get_last_error("Failed to clean up.");
-
-        std::cerr << error << std::endl;
-        // throw std::runtime_error(error.c_str());
-    }
-#endif
 }
 
 addrinfo*
-Socket::get_addrinfo(const char* server_address)
+LinuxTcpSocket::get_addrinfo(const char* server_address)
 {
     addrinfo* server_info;
     addrinfo hints = {0};
 
     hints.ai_family   = AF_UNSPEC;
     hints.ai_socktype = SOCK_STREAM;
-    hints.ai_protocol = protocol; // 0 = ANY
+    hints.ai_protocol = IPPROTO_TCP;
     hints.ai_flags    = AI_PASSIVE;
 
     int result = 0;
@@ -358,8 +213,67 @@ Socket::get_addrinfo(const char* server_address)
     return server_info;
 }
 
+static Connection
+create_pipe()
+{
+    // static const std::vector<std::string> tmpvars = {
+    //       "TMPDIR",
+    //       "TEMP",
+    //       "TMP"
+    // };
+    //
+    // char* tmpdir;
+    // for (auto &var : tmpvars) {
+    //     tmpdir = std::getenv(var.c_str());
+    //
+    //     if(tmpdir != nullptr) {
+    //         break;
+    //     }
+    // }
+    //
+    // if(tmpdir == nullptr) {
+    //     std::cerr << "unable to create pipe. cannot find temporary directory." << std::endl;
+    //
+    //     // return;
+    // }
+
+    char tmpname[L_tmpnam] = {0};
+
+    if(::tmpnam(tmpname) == nullptr) {
+        std::cout << "unable to create temp name" << std::endl;
+
+        return {INVALID_SOCKET};
+    }
+
+    std::cout << "Creating file " << tmpname << std::endl;
+
+    int pipe = -1;
+
+    if(::mkfifo(tmpname, NUMBER_OF_THE_BEAST) == -1) {
+        std::string error = _get_last_error();
+
+        std::cerr << error << std::endl;
+
+        return {pipe};
+    }
+
+    pipe = ::open(tmpname, O_RDONLY | O_NONBLOCK);
+
+    if(pipe == -1) {
+        std::string error = _get_last_error();
+
+        std::cerr << error << std::endl;
+
+        return {pipe};
+    }
+
+    std::cout << "temp name : " << tmpname << std::endl;
+
+    return {pipe};
+}
+
 void
-Socket::create_socket(addrinfo* server_info)
+LinuxTcpSocket::create_socket(addrinfo* server_info)
 {
     int bind_result = SOCKET_NOERROR;
     server_socket = INVALID_SOCKET;
@@ -373,13 +287,8 @@ Socket::create_socket(addrinfo* server_info)
 
         continue_if ((server_socket = ::socket(p->ai_family, p->ai_socktype, p->ai_protocol)) == INVALID_SOCKET);
 
-#ifdef LOSE
-        static const char ONE             = '1';
-        int               REUSE_PORT_ADDR = SO_REUSEADDR;
-#elif defined(LINUX)
         static const int ONE = 1;
         int REUSE_PORT_ADDR = SO_REUSEPORT;
-#endif
 
         is_open = true;
 
@@ -421,7 +330,7 @@ Socket::create_socket(addrinfo* server_info)
 }
 
 void
-Socket::bind(const char* server_address, const char* service)
+LinuxTcpSocket::bind(const char* server_address, const char* service)
 {
     addrinfo* server_info = nullptr;
 
@@ -435,17 +344,21 @@ Socket::bind(const char* server_address, const char* service)
 
     server_info = get_addrinfo(server_address);
 
+    Connection pipe = create_pipe();
+
+    connections.push_back(pipe);
+
     create_socket(server_info);
 }
 
 void
-Socket::bind(const char* server_address, const unsigned short port_no)
+LinuxTcpSocket::bind(const char* server_address, const unsigned short port_no)
 {
     bind(server_address, std::to_string(port_no).c_str());
 }
 
 void
-Socket::listen(const unsigned int count, event_callback callback)
+LinuxTcpSocket::listen(const unsigned int count, event_callback callback)
 {
     queue_count = count;
 
@@ -459,16 +372,16 @@ Socket::listen(const unsigned int count, event_callback callback)
         throw std::runtime_error(error.c_str());
     }
 
-    connections.push_back(server_socket);
+    connections.push_back(_create_connection(server_socket));
 }
 
 void
-Socket::handle_connection()
+LinuxTcpSocket::handle_connection()
 {
     sockaddr_storage client_addr;
 
     socklen_t storage_size = sizeof(client_addr);
-    SOCKET    client       = ::accept(server_socket, (sockaddr * ) & client_addr, &storage_size);
+    SOCKET    client       = ::accept(server_socket, (sockaddr*)&client_addr, &storage_size);
 
     if (client == INVALID_SOCKET) {
         std::string error = _get_last_error("Failed to accept from client.");
@@ -478,7 +391,8 @@ Socket::handle_connection()
     }
 
     FD_SET(client, &read_list);
-    connections.push_back(client);
+
+    connections.push_back(_create_connection(client));
 
     {
         std::string  client_ip   = nt::http::utility::socket::get_in_ip(&client_addr);
@@ -495,14 +409,14 @@ Socket::handle_connection()
 }
 
 void
-Socket::receive_data(SOCKET connection)
+LinuxTcpSocket::receive_data(SOCKET connection)
 {
     int         bytes_rx;
     std::string request;
 
     repeat {
         char             buffer[MAX_INPUT] = {0};
-        const static int flags             = 0; //MSG_DONTWAIT;
+        const static int flags             = MSG_DONTWAIT;
 
         if ((bytes_rx = ::recv(connection, buffer, sizeof(buffer) - 1, flags)) == SOCKET_ERROR) {
             std::string error = _get_last_error("Failed to receive data.");
@@ -530,14 +444,18 @@ Socket::receive_data(SOCKET connection)
         }
     } until(bytes_rx == 0);
 
+    FD_CLR(connection, &read_list);
+
 #ifdef HTTP_WEB_SERVER_SOCKET_DEBUG
     std::cout << "received request from [" << connection << "]"
+              << std::endl
+              << request
               << std::endl;
 #endif
 }
 
 void
-Socket::write_data(SOCKET connection)
+LinuxTcpSocket::write_data(SOCKET connection)
 {
     sockaddr_storage client_addr;
 
@@ -563,8 +481,6 @@ Socket::write_data(SOCKET connection)
                        "<p>host name: " + std::string(hostname) +
                        "</p>\n"
                        "<p>request</p>\n"
-                       // "<pre>" + request + "</pre>\n"
-                       //                     "<a href=''>refresh</a>"
                        "\r\n";
 
     std::string response = "HTTP/1.1 200 OK\r\n"
@@ -586,11 +502,11 @@ Socket::write_data(SOCKET connection)
 }
 
 void
-Socket::reset_socket_lists()
+LinuxTcpSocket::reset_socket_lists()
 {
     FD_ZERO(&read_list);
     FD_ZERO(&write_list);
-    // FD_ZERO(&error_list);
+    FD_ZERO(&error_list);
 
     auto closed = [](const Connection& c) {
         return c.socket == INVALID_SOCKET;
@@ -606,12 +522,12 @@ Socket::reset_socket_lists()
 
         FD_SET(connection.socket, &read_list);
         FD_SET(connection.socket, &write_list);
-        // FD_SET(connection->socket, &error_list);
+        FD_SET(connection.socket, &error_list);
     }
 }
 
 unsigned int
-Socket::get_last_socket()
+LinuxTcpSocket::get_last_socket()
 {
     unsigned int last_socket = server_socket;
 
@@ -625,7 +541,7 @@ Socket::get_last_socket()
 }
 
 bool
-Socket::select()
+LinuxTcpSocket::select()
 {
     reset_socket_lists();
 
@@ -638,7 +554,7 @@ Socket::select()
     std::cout << "selecting from " << connections.size() << " connection(s)\n";
 #endif
 
-    if ((select_result = ::select(last_socket + 1, &read_list, &write_list, nullptr, timeout)) == SOCKET_ERROR) {
+    if ((select_result = ::select(last_socket + 1, &read_list, &write_list, &error_list, timeout)) == SOCKET_ERROR) {
         std::string error = _get_last_error("Failed to poll connections.");
 
         close_socket(server_socket);
@@ -650,7 +566,7 @@ Socket::select()
 }
 
 void
-Socket::open()
+LinuxTcpSocket::open()
 {
     unsigned int ceiling = 0;
 
@@ -682,13 +598,22 @@ Socket::open()
                 connection.socket = INVALID_SOCKET;
                 ceiling--;
             }
+
+            if (FD_ISSET(connection.socket, &error_list)) {
+                std::string error = _get_last_error("Socket exception.");
+                std::cout << error << std::endl;
+                FD_CLR(connection.socket, &error_list);
+                close_socket(connection.socket);
+                connection.socket = INVALID_SOCKET;
+                ceiling--;
+            }
         }
 
     }
 }
 
 void
-Socket::close()
+LinuxTcpSocket::close()
 {
     close_socket(server_socket);
 
@@ -696,21 +621,13 @@ Socket::close()
 }
 
 void
-Socket::close_socket(SOCKET s)
+LinuxTcpSocket::close_socket(SOCKET s)
 {
-#ifdef LOSE
-    int shutdown_result = ::shutdown(s, SD_BOTH);
-
-    if (shutdown_result == SOCKET_ERROR && ::WSAGetLastError() == WSAENOTCONN) {
-        shutdown_result = SOCKET_NOERROR;
-    }
-#elif defined(LINUX)
     int shutdown_result = ::shutdown(s, SHUT_RDWR);
 
     if(shutdown_result == SOCKET_ERROR && errno == ENOTCONN) {
         shutdown_result = SOCKET_NOERROR;
     }
-#endif
 
     if (shutdown_result == SOCKET_ERROR) {
         std::string error = _get_last_error("Failed to shutdown connection.");
@@ -719,9 +636,5 @@ Socket::close_socket(SOCKET s)
         // throw std::runtime_error(error.c_str());
     }
 
-#ifdef LOSE
-    ::closesocket(s);
-#elif defined(LINUX)
     ::close(s);
-#endif
 }

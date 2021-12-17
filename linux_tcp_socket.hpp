@@ -1,8 +1,10 @@
-#ifndef HTTPWEBSERVER_SOCKET_HPP__
-#define HTTPWEBSERVER_SOCKET_HPP__
+#ifndef HTTPWEBSERVER_LINUX_TCP_SOCKET_HPP__
+#define HTTPWEBSERVER_LINUX_TCP_SOCKET_HPP__
 
 #include <string>
 #include <vector>
+#include <cstdio>
+#include <cstdlib>
 
 #include "common.hpp"
 #include "interfaces/socket.hpp"
@@ -13,7 +15,7 @@ namespace nt { namespace http {
 
 typedef void (* event_callback)(void*, void*);
 
-class __HttpWebServerSocketPort__ Socket :
+class __HttpWebServerSocketPort__ LinuxTcpSocket :
       public nt::http::interfaces::Socket
 {
 private:
@@ -21,6 +23,7 @@ private:
     unsigned int       queue_count;
     const unsigned int max_connections;
 
+    SOCKET server_pipe;
     SOCKET server_socket;
 
     bool is_open;
@@ -34,8 +37,8 @@ protected:
     int protocol;
 
 public:
-    Socket();
-    ~Socket() noexcept;
+    LinuxTcpSocket();
+    ~LinuxTcpSocket() noexcept;
 
     void bind(const char*, const char*);
     void bind(const char*, const unsigned short);
@@ -57,5 +60,4 @@ private:
 
 }}
 
-#endif /* HTTPWEBSERVER_SOCKET_HPP__ */
-
+#endif /* HTTPWEBSERVER_LINUX_TCP_SOCKET_HPP__ */

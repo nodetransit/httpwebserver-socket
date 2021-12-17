@@ -112,11 +112,13 @@ set (SOURCE_FILES "interfaces/socket.cpp"
                   "utility/socket.cpp"
                   "timeval.cpp"
                   "connection.cpp"
-                  "socket.cpp"
                   "tcp_socket.cpp"
                   "udp_socket.cpp")
 if (LOSE)
-    list (APPEND SOURCE_FILES "manifest.rc")
+    list (APPEND SOURCE_FILES "manifest.rc"
+                              "windows_tcp_socket.cpp")
+elseif (LINUX)
+    list (APPEND SOURCE_FILES "linux_tcp_socket.cpp")
 endif ()
 
 if (VERBOSE)
