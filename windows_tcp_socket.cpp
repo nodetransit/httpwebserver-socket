@@ -473,7 +473,7 @@ _create_connection(SOCKET socket)
 
     int select_result = ::WSAEventSelect(socket,
                                          ev_handle,
-                                         FD_ACCEPT | FD_WRITE | FD_CLOSE);
+                                         FD_ACCEPT | FD_READ | FD_CLOSE);
 
     if (select_result == SOCKET_ERROR) {
         std::string error = _get_last_error("Failed to select WSA event.");
@@ -563,7 +563,6 @@ WindowsTcpSocket::receive_data(SOCKET connection)
             bool        is_end = end == "\r\n\r\n";
 
             if (is_end) {
-                // FD_CLR(connection, &read_list);
                 break;
             }
         }
@@ -571,6 +570,8 @@ WindowsTcpSocket::receive_data(SOCKET connection)
 
 #ifdef HTTP_WEB_SERVER_SOCKET_DEBUG
     std::cout << "received request from [" << connection << "]"
+              << std::endl
+              << request
               << std::endl;
 #endif
 }
@@ -595,15 +596,12 @@ WindowsTcpSocket::write_data(SOCKET connection)
         throw std::runtime_error(error.c_str());
     }
 
-    tthread::this_thread::sleep_for(tthread::chrono::milliseconds(0));
+    tthread::this_thread::sleep_for(tthread::chrono::seconds (0));
 
     std::string body = "<p>client ip: " + std::string(client_ip) + ":" + std::to_string(client_port) +
                        "</p>\n"
                        "<p>host name: " + std::string(hostname) +
                        "</p>\n"
-                       "<p>request</p>\n"
-                       // "<pre>" + request + "</pre>\n"
-                       //                     "<a href=''>refresh</a>"
                        "\r\n";
 
     std::string response = "HTTP/1.1 200 OK\r\n"
@@ -614,30 +612,12 @@ WindowsTcpSocket::write_data(SOCKET connection)
 
     ::free(hostname);
     ::send(connection, response.c_str(), response.size(), 0);
-    // close_socket(connection);
 
 #ifdef HTTP_WEB_SERVER_SOCKET_DEBUG
     std::cout << "writing response"
               << "to [" << connection << "]"
               << std::endl;
 #endif
-}
-
-void
-WindowsTcpSocket::reset_socket_lists()
-{
-    auto closed = [](const Connection& c) {
-        return c.socket == INVALID_SOCKET;
-    };
-
-    connections.erase(std::remove_if(connections.begin(),
-                                     connections.end(),
-                                     closed),
-                      connections.end());
-
-    for (auto& connection: connections) {
-        // continue_if(connection.socket == INVALID_SOCKET);
-    }
 }
 
 unsigned int
@@ -657,8 +637,6 @@ WindowsTcpSocket::get_last_socket()
 bool
 WindowsTcpSocket::select()
 {
-    reset_socket_lists();
-
     unsigned int last_socket = get_last_socket();
     Timeval timeout = Timeval::Infinite;
 
@@ -709,47 +687,68 @@ WindowsTcpSocket::open()
 
             if (cx != nullptr) {
                 sockaddr_storage client_addr;
+                WSANETWORKEVENTS networkEvents;
 
-                socklen_t storage_size = sizeof(client_addr);
-                SOCKET    client       = accept(cx->socket, (sockaddr*)&client_addr, &storage_size);
+                ::WSAEnumNetworkEvents(cx->socket, ev_handle, &networkEvents);
 
-                if (client == INVALID_SOCKET) {
-                    std::string error = _get_last_error("Failed to accept client.");
+                if(!::WSAResetEvent(ev_handle)) {
+                    std::string error = _get_last_error("Unable to reset event.");
 
-                    // todo: do not throw, just close the socket or what not
+                    close_socket(server_socket);
+                    // ::WSACloseEvent(ev_handle);
+
                     throw std::runtime_error(error.c_str());
                 }
 
-                {
-                    std::string  client_ip   = nt::http::utility::socket::get_in_ip(&client_addr);
-                    unsigned int client_port = nt::http::utility::socket::get_in_port(&client_addr);
+                switch (networkEvents.lNetworkEvents) {
+                case FD_ACCEPT: {
+                    socklen_t storage_size = sizeof(client_addr);
+                    SOCKET    client       = accept(cx->socket, (sockaddr*)&client_addr, &storage_size);
 
-                    std::cout << "------------------------------\n"
-                              << "server [" << server_socket << "] has "
-                              << "new connection from " << client_ip << ":" << client_port
-                              << " [" << client << "]"
-                              << std::endl;
+                    // if (client == INVALID_SOCKET) {
+                    //     std::string error = _get_last_error("Failed to accept client.");
+                    //
+                    //     // todo: do not throw, just close the socket or what not
+                    //     throw std::runtime_error(error.c_str());
+                    // }
+                    //
+                    // {
+                    //     std::string  client_ip   = nt::http::utility::socket::get_in_ip(&client_addr);
+                    //     unsigned int client_port = nt::http::utility::socket::get_in_port(&client_addr);
+                    //
+                    //     std::cout << "------------------------------\n"
+                    //               << "server [" << server_socket << "] has "
+                    //               << "new connection from " << client_ip << ":" << client_port
+                    //               << " [" << client << "]"
+                    //               << std::endl;
+                    // }
+                    //
+                    // std::string body = "<p>test" + std::to_string(rand()) + "</p>";
+                    //
+                    // std::string response = "HTTP/1.1 200 OK\r\n"
+                    //                        "Content-Type: text/html; charset=UTF-8\r\n"
+                    //                        "Connection: keep-alive\r\n"
+                    //                        "Content-Length: " + std::to_string(body.length()) + "\r\n\r\n" +
+                    //                        body.c_str();
+
+                    receive_data(client);
+                    write_data(client);
+
+                    // send(client, response.c_str(), response.length(), 0);
+                    close_socket(client);
                 }
-
-                std::string body = "<p>test" + std::to_string(rand()) + "</p>";
-
-                std::string response = "HTTP/1.1 200 OK\r\n"
-                                       "Content-Type: text/html; charset=UTF-8\r\n"
-                                       "Connection: keep-alive\r\n"
-                                       "Content-Length: " + std::to_string(body.length()) + "\r\n\r\n" +
-                                       body.c_str();
-
-                send(client, response.c_str(), response.length(), 0);
-                close_socket(client);
-            }
-
-            if(!::WSAResetEvent(ev_handle)) {
-                std::string error = _get_last_error("Unable to reset event.");
-
-                close_socket(server_socket);
-                // ::WSACloseEvent(ev_handle);
-
-                throw std::runtime_error(error.c_str());
+                    break;
+                case FD_READ: {
+                    std::cout << "read\n";
+                }
+                    break;
+                case FD_WRITE: {
+                    std::cout << "write\n";
+                }
+                    break;
+                default:
+                    break;
+                }
             }
         }
     }
@@ -779,5 +778,10 @@ WindowsTcpSocket::close_socket(SOCKET s)
         // throw std::runtime_error(error.c_str());
     }
 
-    ::closesocket(s);
+    if (::closesocket(s) == SOCKET_ERROR) {
+        std::string error = _get_last_error("Failed to close socket.");
+
+        std::cerr << error << std::endl;
+        // throw std::runtime_error(error.c_str());
+    }
 }
