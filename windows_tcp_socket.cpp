@@ -503,37 +503,6 @@ WindowsTcpSocket::listen(const unsigned int count, event_callback callback)
 }
 
 void
-WindowsTcpSocket::handle_connection()
-{
-    sockaddr_storage client_addr;
-
-    socklen_t storage_size = sizeof(client_addr);
-    SOCKET    client       = ::accept(server_socket, (sockaddr*)&client_addr, &storage_size);
-
-    if (client == INVALID_SOCKET) {
-        std::string error = _get_last_error("Failed to accept from client.");
-
-        // todo: do not throw, just close the socket or what not
-        throw std::runtime_error(error.c_str());
-    }
-
-    connections.push_back(_create_connection(client));
-
-    {
-        std::string  client_ip   = nt::http::utility::socket::get_in_ip(&client_addr);
-        unsigned int client_port = nt::http::utility::socket::get_in_port(&client_addr);
-
-#ifdef HTTP_WEB_SERVER_SOCKET_DEBUG
-        std::cout << "------------------------------\n"
-                  << "server [" << server_socket << "] has "
-                  << "new connection from " << client_ip << ":" << client_port
-                  << " [" << client << "]"
-                  << std::endl;
-#endif
-    }
-}
-
-void
 WindowsTcpSocket::receive_data(SOCKET connection)
 {
     int         bytes_rx;
@@ -620,31 +589,9 @@ WindowsTcpSocket::write_data(SOCKET connection)
 #endif
 }
 
-unsigned int
-WindowsTcpSocket::get_last_socket()
-{
-    unsigned int last_socket = server_socket;
-
-    for (auto& connection: connections) {
-        if (connection.socket > last_socket) {
-            last_socket = connection.socket;
-        }
-    }
-
-    return last_socket;
-}
-
 bool
 WindowsTcpSocket::select()
 {
-    unsigned int last_socket = get_last_socket();
-    Timeval timeout = Timeval::Infinite;
-
-    int select_result;
-
-#ifdef HTTP_WEB_SERVER_SOCKET_DEBUG
-    std::cout << "selecting from " << connections.size() << " connection(s)\n";
-#endif
 
     return true;
 }
@@ -705,36 +652,9 @@ WindowsTcpSocket::open()
                     socklen_t storage_size = sizeof(client_addr);
                     SOCKET    client       = accept(cx->socket, (sockaddr*)&client_addr, &storage_size);
 
-                    // if (client == INVALID_SOCKET) {
-                    //     std::string error = _get_last_error("Failed to accept client.");
-                    //
-                    //     // todo: do not throw, just close the socket or what not
-                    //     throw std::runtime_error(error.c_str());
-                    // }
-                    //
-                    // {
-                    //     std::string  client_ip   = nt::http::utility::socket::get_in_ip(&client_addr);
-                    //     unsigned int client_port = nt::http::utility::socket::get_in_port(&client_addr);
-                    //
-                    //     std::cout << "------------------------------\n"
-                    //               << "server [" << server_socket << "] has "
-                    //               << "new connection from " << client_ip << ":" << client_port
-                    //               << " [" << client << "]"
-                    //               << std::endl;
-                    // }
-                    //
-                    // std::string body = "<p>test" + std::to_string(rand()) + "</p>";
-                    //
-                    // std::string response = "HTTP/1.1 200 OK\r\n"
-                    //                        "Content-Type: text/html; charset=UTF-8\r\n"
-                    //                        "Connection: keep-alive\r\n"
-                    //                        "Content-Length: " + std::to_string(body.length()) + "\r\n\r\n" +
-                    //                        body.c_str();
-
                     receive_data(client);
                     write_data(client);
 
-                    // send(client, response.c_str(), response.length(), 0);
                     close_socket(client);
                 }
                     break;
