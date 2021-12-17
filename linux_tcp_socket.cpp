@@ -416,7 +416,7 @@ LinuxTcpSocket::receive_data(SOCKET connection)
 
     repeat {
         char             buffer[MAX_INPUT] = {0};
-        const static int flags             = 0; //MSG_DONTWAIT;
+        const static int flags             = MSG_DONTWAIT;
 
         if ((bytes_rx = ::recv(connection, buffer, sizeof(buffer) - 1, flags)) == SOCKET_ERROR) {
             std::string error = _get_last_error("Failed to receive data.");
@@ -444,8 +444,12 @@ LinuxTcpSocket::receive_data(SOCKET connection)
         }
     } until(bytes_rx == 0);
 
+    FD_CLR(connection, &read_list);
+
 #ifdef HTTP_WEB_SERVER_SOCKET_DEBUG
     std::cout << "received request from [" << connection << "]"
+              << std::endl
+              << request
               << std::endl;
 #endif
 }
@@ -477,8 +481,6 @@ LinuxTcpSocket::write_data(SOCKET connection)
                        "<p>host name: " + std::string(hostname) +
                        "</p>\n"
                        "<p>request</p>\n"
-                       // "<pre>" + request + "</pre>\n"
-                       //                     "<a href=''>refresh</a>"
                        "\r\n";
 
     std::string response = "HTTP/1.1 200 OK\r\n"
@@ -504,7 +506,7 @@ LinuxTcpSocket::reset_socket_lists()
 {
     FD_ZERO(&read_list);
     FD_ZERO(&write_list);
-    // FD_ZERO(&error_list);
+    FD_ZERO(&error_list);
 
     auto closed = [](const Connection& c) {
         return c.socket == INVALID_SOCKET;
@@ -520,7 +522,7 @@ LinuxTcpSocket::reset_socket_lists()
 
         FD_SET(connection.socket, &read_list);
         FD_SET(connection.socket, &write_list);
-        // FD_SET(connection->socket, &error_list);
+        FD_SET(connection.socket, &error_list);
     }
 }
 
@@ -552,7 +554,7 @@ LinuxTcpSocket::select()
     std::cout << "selecting from " << connections.size() << " connection(s)\n";
 #endif
 
-    if ((select_result = ::select(last_socket + 1, &read_list, &write_list, nullptr, timeout)) == SOCKET_ERROR) {
+    if ((select_result = ::select(last_socket + 1, &read_list, &write_list, &error_list, timeout)) == SOCKET_ERROR) {
         std::string error = _get_last_error("Failed to poll connections.");
 
         close_socket(server_socket);
@@ -592,6 +594,15 @@ LinuxTcpSocket::open()
 
             if (FD_ISSET(connection.socket, &write_list)) {
                 write_data(connection.socket);
+                close_socket(connection.socket);
+                connection.socket = INVALID_SOCKET;
+                ceiling--;
+            }
+
+            if (FD_ISSET(connection.socket, &error_list)) {
+                std::string error = _get_last_error("Socket exception.");
+                std::cout << error << std::endl;
+                FD_CLR(connection.socket, &error_list);
                 close_socket(connection.socket);
                 connection.socket = INVALID_SOCKET;
                 ceiling--;
