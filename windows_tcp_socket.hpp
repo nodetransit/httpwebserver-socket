@@ -28,7 +28,7 @@ private:
 
     bool is_open;
 
-    std::vector<Connection> connections;
+    std::vector<std::shared_ptr<Connection>> connections;
 
 protected:
     int protocol;

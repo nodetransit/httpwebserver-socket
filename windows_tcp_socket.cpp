@@ -137,7 +137,6 @@ _get_last_error(const std::string& prefix)
     return prefix + " " + _get_last_error();
 }
 
-#ifdef LOSE
 const std::string
 _get_last_error_message(int error)
 {
@@ -167,30 +166,42 @@ _get_last_error_message()
 }
 
 std::unique_ptr<HANDLE[]>
-_get_connection_handles(const std::vector<Connection> &connections)
+_get_connection_handles(const std::vector<std::shared_ptr<Connection>> &connections)
 {
     auto handles = std::make_unique<HANDLE[]>(connections.size());
 
     int i = 0;
     for (auto &connection : connections) {
-        handles[i++] = connection.event;
+        handles[i++] = connection->event;
     }
 
     return handles;
 }
 
 static Connection*
-_find_connection_by_event_handle(const std::vector<Connection> &connections, HANDLE handle)
+_find_connection_by_event_handle(const std::vector<std::shared_ptr<Connection>> &connections, HANDLE handle)
 {
     for (auto &connection : connections) {
-        if (connection.event == handle) {
-            return const_cast<Connection*>(&connection);
+        if (connection->event == handle) {
+            return connection.get();
         }
     }
 
     return nullptr;
 }
-#endif
+
+static void
+_remove_connection(std::vector<std::shared_ptr<Connection>>& connections, const Connection* con)
+{
+    auto is_same_pointer = [con](std::shared_ptr<Connection> c) -> bool {
+        return &*c == con;
+    };
+
+    connections.erase(std::remove_if(connections.begin(),
+                                     connections.end(),
+                                     is_same_pointer
+                                    ));
+}
 
 void
 _tls()
@@ -230,7 +241,6 @@ WindowsTcpSocket::WindowsTcpSocket() :
     _tls();
 
     connections.reserve(max_connections);
-    // connections = std::vector<Connection*>(max_connections, new Connection());
 
     int     ret;
     WSADATA wsaData;
@@ -281,7 +291,7 @@ WindowsTcpSocket::get_addrinfo(const char* server_address)
     return server_info;
 }
 
-static Connection
+static Connection*
 create_pipe()
 {
     // static const std::vector<std::string> tmpvars = {
@@ -305,38 +315,39 @@ create_pipe()
     //     // return;
     // }
 
-    char tmpname[L_tmpnam] = {0};
+    // char tmpname[L_tmpnam] = {0};
+    //
+    // if(::tmpnam(tmpname) == nullptr) {
+    //     std::cout << "unable to create temp name" << std::endl;
+    //
+    //     return nullptr;
+    // }
+    //
+    // std::cout << "Creating file " << tmpname << std::endl;
 
-    if(::tmpnam(tmpname) == nullptr) {
-        std::cout << "unable to create temp name" << std::endl;
+    OVERLAPPED* overlapped = new OVERLAPPED();
+    std::string pipe_name  = "server";
 
-        return {INVALID_SOCKET};
-    }
-
-    std::cout << "Creating file " << tmpname << std::endl;
-
-    OVERLAPPED *overlapped = new OVERLAPPED();
-    std::string pipe_name  = "\\\\.\\pipe\\server";
-
-    HANDLE pipe = ::CreateNamedPipe(pipe_name.c_str(),
+    HANDLE pipe = ::CreateNamedPipe(("\\\\.\\pipe\\" + pipe_name).c_str(),
                                     PIPE_ACCESS_DUPLEX | FILE_FLAG_OVERLAPPED,
-                                    PIPE_TYPE_BYTE | PIPE_NOWAIT,
-                                    1, 0, 0, 0,
+                                    PIPE_TYPE_BYTE | PIPE_WAIT,
+                                    PIPE_UNLIMITED_INSTANCES,
+                                    0, 0, 0,
                                     nullptr);
 
     if (pipe == nullptr || pipe == INVALID_HANDLE_VALUE) {
         std::cout << "Failed to create outbound pipe instance. "
                   << _get_last_error_message()
                   << std::endl;
-        return {INVALID_SOCKET};
+        return nullptr;
     }
 
-    overlapped->hEvent = ::CreateEvent(nullptr, true, true, nullptr);
+    overlapped->hEvent = ::CreateEvent(nullptr, true, false, nullptr);
     if (overlapped->hEvent == nullptr) {
         std::cout << "Failed to create event. "
                   << _get_last_error_message()
                   << std::endl;
-        return {INVALID_SOCKET};
+        return nullptr;
     }
 
     BOOL result = ::ConnectNamedPipe(pipe, overlapped);
@@ -344,8 +355,8 @@ create_pipe()
         int error = ::GetLastError();
 
         switch (error) {
-        case ERROR_IO_PENDING: // The overlapped connection in progress.
-            // fPendingIO = TRUE;
+        case ERROR_IO_PENDING:
+            std::cout << "The overlapped connection in progress\n";
             break;
 
         case ERROR_PIPE_CONNECTED: // Client is already connected, so signal an event.
@@ -354,6 +365,7 @@ create_pipe()
             }
 
         case ERROR_PIPE_LISTENING:
+            std::cout << "Pipe is listening\n";
             break;
 
         default: { // If an error occurs during the connect operation...
@@ -361,14 +373,14 @@ create_pipe()
                       << _get_last_error_message(error)
                       << std::endl;
             ::CloseHandle(pipe);
-            return {INVALID_SOCKET};
+            return nullptr;
         }
         }
     }
 
     std::cout << "pipe name: " << pipe_name << std::endl;
 
-    return {INVALID_SOCKET, overlapped->hEvent};
+    return new Connection(INVALID_SOCKET, overlapped->hEvent, pipe, overlapped);
 }
 
 void
@@ -443,10 +455,10 @@ WindowsTcpSocket::bind(const char* server_address, const char* service)
 
     server_info = get_addrinfo(server_address);
 
-    Connection pipe = create_pipe();
-    pipe.name = "pipe";
+    Connection* pipe = create_pipe();
+    pipe->name = "pipe";
 
-    connections.push_back(pipe);
+    connections.push_back(std::shared_ptr<Connection>(pipe));
 
     create_socket(server_info);
 }
@@ -457,13 +469,13 @@ WindowsTcpSocket::bind(const char* server_address, const unsigned short port_no)
     bind(server_address, std::to_string(port_no).c_str());
 }
 
-static Connection
+static Connection*
 _create_connection(SOCKET socket)
 {
     //HANDLE ev_handle = ::CreateEvent(nullptr, true, true, nullptr);
     HANDLE ev_handle = ::WSACreateEvent();
 
-    std::cout << "event handle:" << ev_handle << "\n";
+    std::cout << "server event handle :" << ev_handle << "\n";
 
     if(ev_handle == WSA_INVALID_EVENT) {
         std::string error = _get_last_error("Failed to create event.");
@@ -473,7 +485,7 @@ _create_connection(SOCKET socket)
 
     int select_result = ::WSAEventSelect(socket,
                                          ev_handle,
-                                         FD_ACCEPT | FD_READ | FD_CLOSE);
+                                         FD_ACCEPT | FD_READ | FD_WRITE | FD_CLOSE);
 
     if (select_result == SOCKET_ERROR) {
         std::string error = _get_last_error("Failed to select WSA event.");
@@ -481,7 +493,7 @@ _create_connection(SOCKET socket)
         throw std::runtime_error(error.c_str());
     }
 
-    return {socket, ev_handle};
+    return new Connection(socket, ev_handle);
 }
 
 void
@@ -499,7 +511,7 @@ WindowsTcpSocket::listen(const unsigned int count, event_callback callback)
         throw std::runtime_error(error.c_str());
     }
 
-    connections.push_back(_create_connection(server_socket));
+    connections.push_back(std::shared_ptr<Connection>(_create_connection(server_socket)));
 }
 
 void
@@ -602,7 +614,7 @@ WindowsTcpSocket::open()
     unsigned int ceiling = 0;
 
     while (true) {
-        std::cout << "listening\n";
+        std::cout << "listening from " << connections.size() << " connections\n";
 
         auto handles = _get_connection_handles(connections);
 
@@ -630,7 +642,7 @@ WindowsTcpSocket::open()
 
             Connection* cx = _find_connection_by_event_handle(connections, ev_handle);
 
-            std::cout << *cx << std::endl;
+            std::cout << "event from :" << *cx << std::endl;
 
             if (cx != nullptr) {
                 sockaddr_storage client_addr;
@@ -653,20 +665,31 @@ WindowsTcpSocket::open()
                     SOCKET    client       = accept(cx->socket, (sockaddr*)&client_addr, &storage_size);
 
                     receive_data(client);
-                    write_data(client);
-
-                    close_socket(client);
+                    // write_data(client);
+                    // close_socket(client);
+                    connections.push_back(std::shared_ptr<Connection>(_create_connection(client)));
                 }
                     break;
                 case FD_READ: {
                     std::cout << "read\n";
+
+                    receive_data(cx->socket);
                 }
                     break;
                 case FD_WRITE: {
                     std::cout << "write\n";
+
+                    write_data(cx->socket);
+                    close_socket(cx->socket);
+                    _remove_connection(connections, cx);
                 }
                     break;
-                default:
+                case FD_CLOSE: {
+                    std::cout << "close\n";
+                }
+                default: {
+                    std::cout << "default\n";
+                }
                     break;
                 }
             }
