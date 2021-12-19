@@ -44,7 +44,7 @@ Connection::~Connection() noexcept
     if(socket != INVALID_SOCKET) {
 #ifdef LOSE
         ::shutdown(socket, SD_BOTH);
-        ::closesocket(s);
+        ::closesocket(socket);
 #else
         ::shutdown(socket, SHUT_RDWR);
         ::close(socket);
