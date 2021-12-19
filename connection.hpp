@@ -11,6 +11,9 @@ public:
     SOCKET socket;
 #ifdef LOSE
     HANDLE  event;
+    HANDLE  pipe;
+    OVERLAPPED* overlapped;
+    bool is_reading;
 #endif
     std::string name;
 
@@ -18,7 +21,9 @@ public:
     Connection(const SOCKET);
 #ifdef LOSE
     Connection(const SOCKET, const HANDLE);
+    Connection(const SOCKET, const HANDLE, const HANDLE, OVERLAPPED*);
 #endif
+    ~Connection() noexcept;
 
     friend std::ostream& operator<<(std::ostream&, const Connection&);
 };
