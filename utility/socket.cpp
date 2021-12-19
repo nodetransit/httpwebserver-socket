@@ -164,7 +164,7 @@ _close_socket(int socket)
 {
 #ifdef LOSE
     ::shutdown(socket, SD_BOTH);
-    ::closesocket(s);
+    ::closesocket(socket);
 #else
     ::shutdown(socket, SHUT_RDWR);
     ::close(socket);
@@ -204,7 +204,7 @@ create_socket(const char* host, const char* service)
 
         continue_if ((server_socket = ::socket(p->ai_family, p->ai_socktype, p->ai_protocol)) == INVALID_SOCKET);
 
-#ifdef lose
+#ifdef LOSE
         static const char ONE             = '1';
         int               REUSE_PORT_ADDR = SO_REUSEADDR;
 #else
