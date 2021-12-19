@@ -502,6 +502,8 @@ _create_connection(SOCKET socket)
         throw std::runtime_error(error.c_str());
     }
 
+    tthread::this_thread::sleep_for(tthread::chrono::microseconds(0));
+
     return new Connection(socket, ev_handle);
 }
 
@@ -536,7 +538,7 @@ WindowsTcpSocket::receive_data(SOCKET connection)
         char             buffer[MAX_INPUT] = {0};
         const static int flags             = 0; //MSG_DONTWAIT;
 
-        tthread::this_thread::sleep_for(tthread::chrono::milliseconds(1));
+        tthread::this_thread::sleep_for(tthread::chrono::microseconds(1));
 
         if ((bytes_rx = ::recv(connection, buffer, sizeof(buffer) - 1, flags)) == SOCKET_ERROR) {
             std::string error = _get_last_error("Failed to receive data.");
@@ -591,7 +593,7 @@ WindowsTcpSocket::write_data(SOCKET connection)
         throw std::runtime_error(error.c_str());
     }
 
-    tthread::this_thread::sleep_for(tthread::chrono::milliseconds(0));
+    tthread::this_thread::sleep_for(tthread::chrono::microseconds(0));
 
     std::string body = "<p>client ip: " + std::string(client_ip) + ":" + std::to_string(client_port) +
                        "</p>\n"
@@ -641,7 +643,7 @@ _handle_pipe(Connection* cx)
 
             if (!cx->is_read) {
                 // will not load buffer if thread does not sleep
-                tthread::this_thread::sleep_for(tthread::chrono::milliseconds(18));
+                tthread::this_thread::sleep_for(tthread::chrono::microseconds(1));
 
                 char read_buff[100] = {0};
 
@@ -675,6 +677,33 @@ _handle_pipe(Connection* cx)
             _connect_to_client(cx->pipe, cx->overlapped);
         }
     }
+}
+
+inline void
+WindowsTcpSocket::reset_wsa_event(HANDLE event)
+{
+    if (!::WSAResetEvent(event)) {
+        std::string error = _get_last_error("Unable to reset event.");
+
+        close_socket(server_socket);
+        // ::WSACloseEvent(ev_handle);
+
+        throw std::runtime_error(error.c_str());
+    }
+}
+
+static inline bool
+_is_set(std::vector<int> bits, int set)
+{
+    bool is_set = false;
+
+    for (auto& bit :bits) {
+        is_set |= static_cast<bool>(bit & set);
+
+        break_if(is_set);
+    }
+
+    return is_set;
 }
 
 void
@@ -711,7 +740,7 @@ WindowsTcpSocket::open()
 
             continue_if (cx == nullptr);
 
-            // std::cout << "event from :" << *cx << std::endl;
+            std::cout << "event from :" << *cx << std::endl;
 
             WSANETWORKEVENTS networkEvents;
 
@@ -721,51 +750,48 @@ WindowsTcpSocket::open()
                 continue;
             }
 
-            if (!::WSAResetEvent(ev_handle)) {
-                std::string error = _get_last_error("Unable to reset event.");
-
-                close_socket(server_socket);
-                // ::WSACloseEvent(ev_handle);
-
-                throw std::runtime_error(error.c_str());
-            }
+            reset_wsa_event(cx->event);
 
             sockaddr_storage client_addr;
 
-            switch (networkEvents.lNetworkEvents) {
-            case FD_ACCEPT: {
+            if (_is_set({FD_ACCEPT}, networkEvents.lNetworkEvents)) {
+                std::cout << "accept\n";
                 socklen_t storage_size = sizeof(client_addr);
-                SOCKET    client       = accept(cx->socket, (sockaddr * ) & client_addr, &storage_size);
+                SOCKET    client       = accept(cx->socket, (sockaddr*) & client_addr, &storage_size);
 
-                receive_data(client);
+                // receive_data(client);
                 // write_data(client);
                 // close_socket(client);
-                connections.push_back(std::shared_ptr<Connection>(_create_connection(client)));
+                auto client_con = _create_connection(client);
+                client_con->name = "client";
+                connections.push_back(std::shared_ptr<Connection>(client_con));
             }
-                break;
-            case FD_READ: {
-                // std::cout << "read\n";
+
+            if (_is_set({FD_OOB, FD_READ}, networkEvents.lNetworkEvents)) {
+                std::cout << "read\n";
 
                 receive_data(cx->socket);
+                cx->is_read = true;
             }
-                break;
-            case FD_WRITE: {
-                // std::cout << "write\n";
 
-                write_data(cx->socket);
-                close_socket(cx->socket);
+            if (_is_set({FD_WRITE}, networkEvents.lNetworkEvents)) {
+                std::cout << "write\n";
+
+
+                if (cx->is_read) {
+                    write_data(cx->socket);
+                    close_socket(cx->socket);
+                    _remove_connection(connections, cx);
+                }
+            }
+
+            if (_is_set({FD_CLOSE}, networkEvents.lNetworkEvents)) {
+                std::cout << "close\n";
                 _remove_connection(connections, cx);
             }
-                break;
-            case FD_CLOSE: {
-                // std::cout << "close\n";
-                _remove_connection(connections, cx);
-            }
-                break;
-            default: {
-                // std::cout << "default\n";
-            }
-                break;
+
+            if (!_is_set({FD_ACCEPT, FD_OOB, FD_READ, FD_WRITE, FD_CLOSE}, networkEvents.lNetworkEvents)) {
+                std::cout << "default (" << networkEvents.lNetworkEvents << ")\n";
             }
         }
     }

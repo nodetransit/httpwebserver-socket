@@ -50,6 +50,7 @@ private:
     bool select();
     void receive_data(SOCKET);
     void write_data(SOCKET);
+    inline void reset_wsa_event(HANDLE);
 
 };
 
