@@ -536,6 +536,8 @@ WindowsTcpSocket::receive_data(SOCKET connection)
         char             buffer[MAX_INPUT] = {0};
         const static int flags             = 0; //MSG_DONTWAIT;
 
+        tthread::this_thread::sleep_for(tthread::chrono::milliseconds(1));
+
         if ((bytes_rx = ::recv(connection, buffer, sizeof(buffer) - 1, flags)) == SOCKET_ERROR) {
             std::string error = _get_last_error("Failed to receive data.");
 
@@ -589,7 +591,7 @@ WindowsTcpSocket::write_data(SOCKET connection)
         throw std::runtime_error(error.c_str());
     }
 
-    tthread::this_thread::sleep_for(tthread::chrono::seconds(0));
+    tthread::this_thread::sleep_for(tthread::chrono::milliseconds(0));
 
     std::string body = "<p>client ip: " + std::string(client_ip) + ":" + std::to_string(client_port) +
                        "</p>\n"
