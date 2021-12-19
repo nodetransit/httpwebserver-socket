@@ -8,8 +8,8 @@ Connection::Connection(const SOCKET n) :
       event(INVALID_HANDLE_VALUE),
       pipe(INVALID_HANDLE_VALUE),
       overlapped(nullptr),
-      is_reading(false),
 #endif
+      is_read(false),
       name("")
 {
 }
@@ -21,7 +21,7 @@ Connection::Connection(const SOCKET n, const HANDLE h) :
       event(h),
       pipe(INVALID_HANDLE_VALUE),
       overlapped(nullptr),
-      is_reading(false),
+      is_read(false),
       name("")
 {
 }
@@ -31,7 +31,7 @@ Connection::Connection(const SOCKET n, const HANDLE h, const HANDLE p, OVERLAPPE
       event(h),
       pipe(p),
       overlapped(o),
-      is_reading(false),
+      is_read(false),
       name("")
 {
 }

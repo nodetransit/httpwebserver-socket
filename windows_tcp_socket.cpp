@@ -639,7 +639,7 @@ _handle_pipe(Connection* cx)
             // cx->overlapped = new OVERLAPPED();
             // cx->overlapped->hEvent = cx->event;
 
-            if (!cx->is_reading) {
+            if (!cx->is_read) {
                 // will not load buffer if thread does not sleep
                 tthread::this_thread::sleep_for(tthread::chrono::milliseconds(18));
 
@@ -648,10 +648,10 @@ _handle_pipe(Connection* cx)
                 if (::ReadFile(cx->pipe, read_buff, 99, nullptr, cx->overlapped)) {
                     std::cout << "read " << std::string(read_buff) << std::endl;
 
-                    cx->is_reading = true;
+                    cx->is_read = true;
                 } else {
                     pipe_closed = true;
-                    cx->is_reading = false;
+                    cx->is_read = false;
                 }
 
             } else {
@@ -661,10 +661,10 @@ _handle_pipe(Connection* cx)
                     pipe_closed = true;
                 }
 
-                cx->is_reading = false;
+                cx->is_read = false;
             }
         } else {
-            cx->is_reading = false;
+            cx->is_read = false;
         }
 
         if (!get_result || pipe_closed) {
