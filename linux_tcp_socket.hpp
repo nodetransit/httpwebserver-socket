@@ -48,8 +48,6 @@ public:
     void close();
 
 private:
-    addrinfo* get_addrinfo(const char*);
-    void create_socket(addrinfo*);
     void close_socket(SOCKET);
     void reset_socket_lists();
     unsigned int get_last_socket();
