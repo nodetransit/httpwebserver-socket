@@ -14,8 +14,11 @@ public:
     HANDLE  event;
     HANDLE  pipe;
     OVERLAPPED* overlapped;
-    bool is_reading;
 #endif
+    /**
+     * @brief has date been read from the device
+     */
+    bool is_read;
     std::string name;
 
     Connection() = default;
