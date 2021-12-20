@@ -420,7 +420,9 @@ LinuxTcpSocket::write_data(SOCKET connection)
                        "</p>\n"
                        "<p>host name: " + std::string(hostname) +
                        "</p>\n"
-                       "<p>request</p>\n"
+                       "<p>"
+                       "request " + std::to_string(rand() % 100) +
+                       "</p>\n"
                        "\r\n";
 
     std::string response = "HTTP/1.1 200 OK\r\n"
@@ -464,7 +466,7 @@ LinuxTcpSocket::reset_socket_lists()
     }
 }
 
-unsigned int
+unsigned short
 LinuxTcpSocket::get_last_socket()
 {
     unsigned int last_socket = server_socket;
@@ -483,7 +485,7 @@ LinuxTcpSocket::select()
 {
     reset_socket_lists();
 
-    unsigned int last_socket = get_last_socket();
+    unsigned short last_socket = get_last_socket();
     Timeval timeout = Timeval::Infinite;
 
     int select_result;
@@ -503,30 +505,37 @@ LinuxTcpSocket::select()
     return select_result == 0;
 }
 
+inline bool
+LinuxTcpSocket::is_new_connection(const Connection* connection) {
+    return connection->socket == server_socket;
+}
+
 void
 LinuxTcpSocket::open()
 {
     unsigned int ceiling = 0;
 
     while (true) {
+        bool leave = false;
+
         continue_if (select());
 
-        if (FD_ISSET(server_socket, &read_list)) {
-            if (ceiling < max_connections) {
-                handle_connection();
-                ceiling++;
-            }
-        }
-
         for (auto& connection : connections) {
-            continue_if (connection->socket == INVALID_SOCKET
-            // || connection.socket == server_socket
-                        );
+            continue_if (connection->socket == INVALID_SOCKET);
 
-            if (connection->socket != server_socket && FD_ISSET(connection->socket, &read_list)) {
-                receive_data(connection->socket);
+            if (FD_ISSET(connection->socket, &read_list)) {
+                if (is_new_connection(connection.get())) {
+                    if (ceiling < max_connections) {
+                        handle_connection();
+                        ceiling++;
+                    }
 
-                FD_CLR(connection->socket, &read_list);
+                    break;
+                } else {
+                    receive_data(connection->socket);
+
+                    FD_CLR(connection->socket, &read_list);
+                }
             }
 
             if (FD_ISSET(connection->socket, &write_list)) {
@@ -549,6 +558,7 @@ LinuxTcpSocket::open()
             }
         }
 
+        break_if(leave);
     }
 }
 
