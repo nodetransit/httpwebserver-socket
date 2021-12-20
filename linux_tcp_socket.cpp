@@ -312,7 +312,7 @@ LinuxTcpSocket::listen(const unsigned int count, event_callback callback)
 }
 
 void
-LinuxTcpSocket::handle_connection()
+LinuxTcpSocket::handle_new_connection()
 {
     sockaddr_storage client_addr;
 
@@ -327,6 +327,7 @@ LinuxTcpSocket::handle_connection()
     }
 
     FD_SET(client, &read_list);
+    tthread::this_thread::sleep_for(tthread::chrono::microseconds(1));
 
     auto con = _create_connection(client);
     con->name = "client";
@@ -338,7 +339,7 @@ LinuxTcpSocket::handle_connection()
         unsigned int client_port = nt::http::utility::socket::get_in_port(&client_addr);
 
 #ifdef HTTP_WEB_SERVER_SOCKET_DEBUG
-        std::cout << "------------------------------\n"
+        std::cout << "------------------------------" + std::to_string(rand() % 100) + "\n"
                   << "server [" << server_socket << "] has "
                   << "new connection from " << client_ip << ":" << client_port
                   << " [" << client << "]"
@@ -526,19 +527,20 @@ LinuxTcpSocket::open()
             if (FD_ISSET(connection->socket, &read_list)) {
                 if (is_new_connection(connection.get())) {
                     if (ceiling < max_connections) {
-                        handle_connection();
+                        handle_new_connection();
                         ceiling++;
                     }
 
                     break;
                 } else {
                     receive_data(connection->socket);
+                    connection->is_read = true;
 
                     FD_CLR(connection->socket, &read_list);
                 }
             }
 
-            if (FD_ISSET(connection->socket, &write_list)) {
+            if (FD_ISSET(connection->socket, &write_list) && connection->is_read) {
                 write_data(connection->socket);
                 close_socket(connection->socket);
                 connection->socket = INVALID_SOCKET;
