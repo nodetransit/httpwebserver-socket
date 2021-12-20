@@ -28,10 +28,11 @@ private:
 
     bool is_open;
 
-    std::vector<Connection> connections;
-    fd_set                  read_list;
-    fd_set                  write_list;
-    fd_set                  error_list;
+    std::vector<std::shared_ptr<Connection>> connections;
+
+    fd_set read_list;
+    fd_set write_list;
+    fd_set error_list;
 
 protected:
     int protocol;
@@ -47,13 +48,12 @@ public:
     void close();
 
 private:
-    addrinfo* get_addrinfo(const char*);
-    void create_socket(addrinfo*);
     void close_socket(SOCKET);
     void reset_socket_lists();
-    unsigned int get_last_socket();
+    unsigned short get_last_socket();
     bool select();
-    void handle_connection();
+    inline bool is_new_connection(const Connection*);
+    void handle_new_connection();
     void receive_data(SOCKET);
     void write_data(SOCKET);
 };

@@ -8,6 +8,7 @@ namespace nt { namespace http {
 class Connection
 {
 public:
+    bool close;
     SOCKET socket;
 #ifdef LOSE
     HANDLE  event;

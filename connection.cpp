@@ -3,6 +3,7 @@
 using namespace nt::http;
 
 Connection::Connection(const SOCKET n) :
+      close(false),
       socket(n),
 #ifdef LOSE
       event(INVALID_HANDLE_VALUE),
@@ -15,8 +16,8 @@ Connection::Connection(const SOCKET n) :
 }
 
 #ifdef LOSE
-
 Connection::Connection(const SOCKET n, const HANDLE h) :
+      close(false),
       socket(n),
       event(h),
       pipe(INVALID_HANDLE_VALUE),
@@ -27,6 +28,7 @@ Connection::Connection(const SOCKET n, const HANDLE h) :
 }
 
 Connection::Connection(const SOCKET n, const HANDLE h, const HANDLE p, OVERLAPPED* o) :
+      close(false),
       socket(n),
       event(h),
       pipe(p),
@@ -35,11 +37,20 @@ Connection::Connection(const SOCKET n, const HANDLE h, const HANDLE p, OVERLAPPE
       name("")
 {
 }
-
 #endif
 
 Connection::~Connection() noexcept
 {
+    if(socket != INVALID_SOCKET) {
+#ifdef LOSE
+        ::shutdown(socket, SD_BOTH);
+        ::closesocket(socket);
+#else
+        ::shutdown(socket, SHUT_RDWR);
+        ::close(socket);
+#endif
+    }
+
 #ifdef LOSE
     if (event != INVALID_HANDLE_VALUE) {
         ::CloseHandle(event);
@@ -52,7 +63,6 @@ Connection::~Connection() noexcept
     if (pipe != INVALID_HANDLE_VALUE) {
         ::CloseHandle(pipe);
     }
-
 #endif
 }
 

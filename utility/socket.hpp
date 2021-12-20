@@ -39,6 +39,9 @@ get_in_port(sockaddr_storage* sa)
 
 int get_bound_port(SOCKET socket);
 
+SOCKET create_socket(const char*, const char*);
+SOCKET create_socket(const char*, const int);
+
 }}}}
 
 #endif /* HTTPWEBSERVER_SOCKET_HPP_UTILITY__ */

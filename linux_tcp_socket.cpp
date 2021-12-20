@@ -166,10 +166,10 @@ _get_last_error(const std::string& prefix)
     return prefix + " " + _get_last_error();
 }
 
-Connection
+Connection*
 _create_connection(SOCKET socket)
 {
-    return {socket};
+    return new Connection(socket);
 }
 }
 
@@ -190,31 +190,8 @@ LinuxTcpSocket::~LinuxTcpSocket() noexcept
     }
 }
 
-addrinfo*
-LinuxTcpSocket::get_addrinfo(const char* server_address)
-{
-    addrinfo* server_info;
-    addrinfo hints = {0};
-
-    hints.ai_family   = AF_UNSPEC;
-    hints.ai_socktype = SOCK_STREAM;
-    hints.ai_protocol = IPPROTO_TCP;
-    hints.ai_flags    = AI_PASSIVE;
-
-    int result = 0;
-
-    if ((result = ::getaddrinfo(server_address, port.c_str(), &hints, &server_info)) != SOCKET_NOERROR) {
-        std::string error = _get_last_error("Failed to get information about the specified network port/service '" + port + "'.");
-
-        throw std::runtime_error(error.c_str());
-    }
-
-
-    return server_info;
-}
-
-static Connection
-create_pipe()
+static Connection*
+_create_pipe()
 {
     // static const std::vector<std::string> tmpvars = {
     //       "TMPDIR",
@@ -242,7 +219,7 @@ create_pipe()
     if(::tmpnam(tmpname) == nullptr) {
         std::cout << "unable to create temp name" << std::endl;
 
-        return {INVALID_SOCKET};
+        return nullptr;
     }
 
     std::cout << "Creating file " << tmpname << std::endl;
@@ -254,7 +231,7 @@ create_pipe()
 
         std::cerr << error << std::endl;
 
-        return {pipe};
+        return nullptr;
     }
 
     pipe = ::open(tmpname, O_RDONLY | O_NONBLOCK);
@@ -264,52 +241,30 @@ create_pipe()
 
         std::cerr << error << std::endl;
 
-        return {pipe};
+        return nullptr;
     }
 
     std::cout << "temp name : " << tmpname << std::endl;
 
-    return {pipe};
+    auto connection = new Connection(pipe);
+    connection->name = "pipe";
+
+    return connection;
 }
 
 void
-LinuxTcpSocket::create_socket(addrinfo* server_info)
+LinuxTcpSocket::bind(const char* server_address, const char* service)
 {
-    int bind_result = SOCKET_NOERROR;
-    server_socket = INVALID_SOCKET;
+    auto pipe = _create_pipe();
 
-    for (addrinfo* p = server_info; p != nullptr; p = p->ai_next) {
-        if (is_open) {
-            close_socket(server_socket);
-
-            is_open = false;
-        }
-
-        continue_if ((server_socket = ::socket(p->ai_family, p->ai_socktype, p->ai_protocol)) == INVALID_SOCKET);
-
-        static const int ONE = 1;
-        int REUSE_PORT_ADDR = SO_REUSEPORT;
-
-        is_open = true;
-
-        break_if (::setsockopt(server_socket, SOL_SOCKET, REUSE_PORT_ADDR, &ONE, sizeof(ONE)) != SOCKET_ERROR &&
-                  (bind_result = ::bind(server_socket, p->ai_addr, p->ai_addrlen)) != SOCKET_ERROR);
+    if (pipe != nullptr) {
+        connections.push_back(std::shared_ptr<Connection>(pipe));
     }
 
-    server_info = nullptr;
+    server_socket = nt::http::utility::socket::create_socket(server_address, service);
 
     if (server_socket == INVALID_SOCKET) {
         std::string error = _get_last_error("Failed to create socket.");
-
-        throw std::runtime_error(error.c_str());
-    }
-
-    if (bind_result == SOCKET_ERROR) {
-        std::string error = _get_last_error("Failed to bind port/service " + port + ".");
-
-        close_socket(server_socket);
-
-        is_open = false;
 
         throw std::runtime_error(error.c_str());
     }
@@ -327,28 +282,6 @@ LinuxTcpSocket::create_socket(addrinfo* server_info)
 #endif
 
     is_open = true;
-}
-
-void
-LinuxTcpSocket::bind(const char* server_address, const char* service)
-{
-    addrinfo* server_info = nullptr;
-
-    ______________________________________________________________
-              if (server_info != nullptr) {
-                  freeaddrinfo(server_info);
-              }
-    _____________________________________________________________;
-
-    port = service;
-
-    server_info = get_addrinfo(server_address);
-
-    Connection pipe = create_pipe();
-
-    connections.push_back(pipe);
-
-    create_socket(server_info);
 }
 
 void
@@ -372,11 +305,14 @@ LinuxTcpSocket::listen(const unsigned int count, event_callback callback)
         throw std::runtime_error(error.c_str());
     }
 
-    connections.push_back(_create_connection(server_socket));
+    auto con = _create_connection(server_socket);
+    con->name = "web server";
+
+    connections.push_back(std::shared_ptr<Connection>(con));
 }
 
 void
-LinuxTcpSocket::handle_connection()
+LinuxTcpSocket::handle_new_connection()
 {
     sockaddr_storage client_addr;
 
@@ -391,15 +327,19 @@ LinuxTcpSocket::handle_connection()
     }
 
     FD_SET(client, &read_list);
+    tthread::this_thread::sleep_for(tthread::chrono::microseconds(1));
 
-    connections.push_back(_create_connection(client));
+    auto con = _create_connection(client);
+    con->name = "client";
+
+    connections.push_back(std::shared_ptr<Connection>(con));
 
     {
         std::string  client_ip   = nt::http::utility::socket::get_in_ip(&client_addr);
         unsigned int client_port = nt::http::utility::socket::get_in_port(&client_addr);
 
 #ifdef HTTP_WEB_SERVER_SOCKET_DEBUG
-        std::cout << "------------------------------\n"
+        std::cout << "------------------------------" + std::to_string(rand() % 100) + "\n"
                   << "server [" << server_socket << "] has "
                   << "new connection from " << client_ip << ":" << client_port
                   << " [" << client << "]"
@@ -407,6 +347,7 @@ LinuxTcpSocket::handle_connection()
 #endif
     }
 }
+
 
 void
 LinuxTcpSocket::receive_data(SOCKET connection)
@@ -417,6 +358,8 @@ LinuxTcpSocket::receive_data(SOCKET connection)
     repeat {
         char             buffer[MAX_INPUT] = {0};
         const static int flags             = MSG_DONTWAIT;
+
+        tthread::this_thread::sleep_for(tthread::chrono::microseconds(1));
 
         if ((bytes_rx = ::recv(connection, buffer, sizeof(buffer) - 1, flags)) == SOCKET_ERROR) {
             std::string error = _get_last_error("Failed to receive data.");
@@ -443,8 +386,6 @@ LinuxTcpSocket::receive_data(SOCKET connection)
             }
         }
     } until(bytes_rx == 0);
-
-    FD_CLR(connection, &read_list);
 
 #ifdef HTTP_WEB_SERVER_SOCKET_DEBUG
     std::cout << "received request from [" << connection << "]"
@@ -474,13 +415,15 @@ LinuxTcpSocket::write_data(SOCKET connection)
         throw std::runtime_error(error.c_str());
     }
 
-    tthread::this_thread::sleep_for(tthread::chrono::milliseconds(0));
+    tthread::this_thread::sleep_for(tthread::chrono::microseconds(1));
 
     std::string body = "<p>client ip: " + std::string(client_ip) + ":" + std::to_string(client_port) +
                        "</p>\n"
                        "<p>host name: " + std::string(hostname) +
                        "</p>\n"
-                       "<p>request</p>\n"
+                       "<p>"
+                       "request " + std::to_string(rand() % 100) +
+                       "</p>\n"
                        "\r\n";
 
     std::string response = "HTTP/1.1 200 OK\r\n"
@@ -491,8 +434,6 @@ LinuxTcpSocket::write_data(SOCKET connection)
 
     ::free(hostname);
     ::send(connection, response.c_str(), response.size(), 0);
-    // close_socket(connection);
-    FD_CLR(connection, &write_list);
 
 #ifdef HTTP_WEB_SERVER_SOCKET_DEBUG
     std::cout << "writing response"
@@ -508,8 +449,8 @@ LinuxTcpSocket::reset_socket_lists()
     FD_ZERO(&write_list);
     FD_ZERO(&error_list);
 
-    auto closed = [](const Connection& c) {
-        return c.socket == INVALID_SOCKET;
+    auto closed = [](const std::shared_ptr<Connection>& c) -> bool {
+        return c->socket == INVALID_SOCKET;
     };
 
     connections.erase(std::remove_if(connections.begin(),
@@ -520,20 +461,20 @@ LinuxTcpSocket::reset_socket_lists()
     for (auto& connection: connections) {
         // continue_if(connection.socket == INVALID_SOCKET);
 
-        FD_SET(connection.socket, &read_list);
-        FD_SET(connection.socket, &write_list);
-        FD_SET(connection.socket, &error_list);
+        FD_SET(connection->socket, &read_list);
+        FD_SET(connection->socket, &write_list);
+        FD_SET(connection->socket, &error_list);
     }
 }
 
-unsigned int
+unsigned short
 LinuxTcpSocket::get_last_socket()
 {
     unsigned int last_socket = server_socket;
 
     for (auto& connection: connections) {
-        if (connection.socket > last_socket) {
-            last_socket = connection.socket;
+        if (connection->socket > last_socket) {
+            last_socket = connection->socket;
         }
     }
 
@@ -545,7 +486,7 @@ LinuxTcpSocket::select()
 {
     reset_socket_lists();
 
-    unsigned int last_socket = get_last_socket();
+    unsigned short last_socket = get_last_socket();
     Timeval timeout = Timeval::Infinite;
 
     int select_result;
@@ -565,50 +506,61 @@ LinuxTcpSocket::select()
     return select_result == 0;
 }
 
+inline bool
+LinuxTcpSocket::is_new_connection(const Connection* connection) {
+    return connection->socket == server_socket;
+}
+
 void
 LinuxTcpSocket::open()
 {
     unsigned int ceiling = 0;
 
     while (true) {
+        bool leave = false;
+
         continue_if (select());
 
-        if (FD_ISSET(server_socket, &read_list)) {
-            if (ceiling < max_connections) {
-                handle_connection();
-                ceiling++;
-            }
-        }
-
         for (auto& connection : connections) {
-            continue_if (connection.socket == INVALID_SOCKET
-            // || connection.socket == server_socket
-                        );
+            continue_if (connection->socket == INVALID_SOCKET);
 
-            if (connection.socket != server_socket && FD_ISSET(connection.socket, &read_list)) {
-                receive_data(connection.socket);
-                // close_socket(connection.socket);
-                // connection.socket = INVALID_SOCKET;
-                // ceiling--;
+            if (FD_ISSET(connection->socket, &read_list)) {
+                if (is_new_connection(connection.get())) {
+                    if (ceiling < max_connections) {
+                        handle_new_connection();
+                        ceiling++;
+                    }
+
+                    break;
+                } else {
+                    receive_data(connection->socket);
+                    connection->is_read = true;
+
+                    FD_CLR(connection->socket, &read_list);
+                }
             }
 
-            if (FD_ISSET(connection.socket, &write_list)) {
-                write_data(connection.socket);
-                close_socket(connection.socket);
-                connection.socket = INVALID_SOCKET;
+            if (FD_ISSET(connection->socket, &write_list) && connection->is_read) {
+                write_data(connection->socket);
+                close_socket(connection->socket);
+                connection->socket = INVALID_SOCKET;
                 ceiling--;
+
+                FD_CLR(connection->socket, &write_list);
             }
 
-            if (FD_ISSET(connection.socket, &error_list)) {
-                std::string error = _get_last_error("Socket exception.");
-                std::cout << error << std::endl;
-                FD_CLR(connection.socket, &error_list);
-                close_socket(connection.socket);
-                connection.socket = INVALID_SOCKET;
+            if (FD_ISSET(connection->socket, &error_list)) {
+                std::cout << _get_last_error("Socket exception.") << std::endl;
+
+                close_socket(connection->socket);
+                connection->socket = INVALID_SOCKET;
                 ceiling--;
+
+                FD_CLR(connection->socket, &error_list);
             }
         }
 
+        break_if(leave);
     }
 }
 
