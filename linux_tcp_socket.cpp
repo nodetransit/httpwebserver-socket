@@ -5,6 +5,8 @@
 #include <algorithm>
 #include <tinythread.h>
 
+#include <sys/stat.h>
+
 #include <macros/leave_loop_if.hpp>
 #include <macros/scope_guard.hpp>
 #include <macros/repeat_until.hpp>
@@ -234,7 +236,7 @@ _create_pipe()
         return nullptr;
     }
 
-    pipe = ::open(tmpname, O_RDONLY | O_NONBLOCK);
+    pipe = ::open(tmpname, O_RDWR | O_NONBLOCK);
 
     if(pipe == -1) {
         std::string error = _get_last_error();
@@ -250,6 +252,22 @@ _create_pipe()
     connection->name = "pipe";
 
     return connection;
+}
+
+static inline int
+_get_file_type(const int fd)
+{
+    struct stat sb;
+    if (fstat(fd, &sb) != 0) {
+        // std::string error = _get_last_error("Unable to get file descriptor information.");
+
+        // throw std::runtime_error(error.c_str());
+        return 0;
+    } else {
+        int mode = sb.st_mode & S_IFMT; // file mask
+
+        return mode;
+    }
 }
 
 void
@@ -462,9 +480,13 @@ LinuxTcpSocket::reset_socket_lists()
 
     for (auto& connection: connections) {
         // continue_if(connection.socket == INVALID_SOCKET);
+        int mode = _get_file_type(connection->socket);
+
+        if(mode != S_IFIFO) {
+            FD_SET(connection->socket, &write_list);
+        }
 
         FD_SET(connection->socket, &read_list);
-        FD_SET(connection->socket, &write_list);
         FD_SET(connection->socket, &error_list);
     }
 }
@@ -526,39 +548,71 @@ LinuxTcpSocket::open()
         for (auto& connection : connections) {
             continue_if (connection->socket == INVALID_SOCKET);
 
-            if (FD_ISSET(connection->socket, &read_list)) {
-                if (is_new_connection(connection.get())) {
-                    if (ceiling < max_connections) {
-                        handle_new_connection();
-                        ceiling++;
-                    }
+            // todo move mode to Connection
+            int mode = _get_file_type(connection->socket);
 
-                    break;
-                } else {
-                    receive_data(connection->socket);
-                    connection->is_read = true;
+            if (mode == S_IFIFO) {
+                std::cout << "pipe ";
+
+                if (FD_ISSET(connection->socket, &read_list)) {
+                    std::cout << "read\n";
+                    char buff[100] = {0};
+
+                    read(connection->socket, (void*)buff, 99);
+                    std::cout << "read :" << buff << std::endl;
+
+                    //// writing will generate another read event
+                    //// use pipe socket for writing
+                    // char reply[100] = "reply\n";
+                    // write(connection->socket, reply, 100);
 
                     FD_CLR(connection->socket, &read_list);
                 }
-            }
 
-            if (FD_ISSET(connection->socket, &write_list) && connection->is_read) {
-                write_data(connection->socket);
-                close_socket(connection->socket);
-                connection->socket = INVALID_SOCKET;
-                ceiling--;
+                // if (FD_ISSET(connection->socket, &write_list) && connection->is_read) {
+                //     std::cout << "write\n";
+                //     FD_CLR(connection->socket, &write_list);
+                // }
 
-                FD_CLR(connection->socket, &write_list);
-            }
+                if (FD_ISSET(connection->socket, &error_list)) {
+                    std::cout << "error\n";
+                    FD_CLR(connection->socket, &error_list);
+                }
+            } else if (mode == S_IFSOCK) {
+                if (FD_ISSET(connection->socket, &read_list)) {
+                    if (is_new_connection(connection.get())) {
+                        if (ceiling < max_connections) {
+                            handle_new_connection();
+                            ceiling++;
+                        }
 
-            if (FD_ISSET(connection->socket, &error_list)) {
-                std::cout << _get_last_error("Socket exception.") << std::endl;
+                        break;
+                    } else {
+                        receive_data(connection->socket);
+                        connection->is_read = true;
 
-                close_socket(connection->socket);
-                connection->socket = INVALID_SOCKET;
-                ceiling--;
+                        FD_CLR(connection->socket, &read_list);
+                    }
+                }
 
-                FD_CLR(connection->socket, &error_list);
+                if (FD_ISSET(connection->socket, &write_list) && connection->is_read) {
+                    write_data(connection->socket);
+                    close_socket(connection->socket);
+                    connection->socket = INVALID_SOCKET;
+                    ceiling--;
+
+                    FD_CLR(connection->socket, &write_list);
+                }
+
+                if (FD_ISSET(connection->socket, &error_list)) {
+                    std::cout << _get_last_error("Socket exception.") << std::endl;
+
+                    close_socket(connection->socket);
+                    connection->socket = INVALID_SOCKET;
+                    ceiling--;
+
+                    FD_CLR(connection->socket, &error_list);
+                }
             }
         }
 

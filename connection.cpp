@@ -46,6 +46,7 @@ Connection::~Connection() noexcept
         ::shutdown(socket, SD_BOTH);
         ::closesocket(socket);
 #else
+        // todo check if shutdown will cause an error on pipes
         ::shutdown(socket, SHUT_RDWR);
         ::close(socket);
 #endif
