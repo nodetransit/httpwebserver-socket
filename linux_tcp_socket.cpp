@@ -277,6 +277,8 @@ LinuxTcpSocket::bind(const char* server_address, const char* service)
         throw std::runtime_error(error.c_str());
     }
 
+    port = service;
+
 #ifdef HTTP_WEB_SERVER_SOCKET_DEBUG
     std::cout << "listening to port " << bound_port << std::endl;
 #endif
