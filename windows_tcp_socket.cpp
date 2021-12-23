@@ -304,37 +304,6 @@ _connect_to_client(HANDLE pipe, OVERLAPPED* overlapped)
 static Connection*
 _create_pipe()
 {
-    // static const std::vector<std::string> tmpvars = {
-    //       "TMPDIR",
-    //       "TEMP",
-    //       "TMP"
-    // };
-    //
-    // char* tmpdir;
-    // for (auto &var : tmpvars) {
-    //     tmpdir = std::getenv(var.c_str());
-    //
-    //     if(tmpdir != nullptr) {
-    //         break;
-    //     }
-    // }
-    //
-    // if(tmpdir == nullptr) {
-    //     std::cerr << "unable to create pipe. cannot find temporary directory." << std::endl;
-    //
-    //     // return;
-    // }
-
-    // char tmpname[L_tmpnam] = {0};
-    //
-    // if(::tmpnam(tmpname) == nullptr) {
-    //     std::cout << "unable to create temp name" << std::endl;
-    //
-    //     return nullptr;
-    // }
-    //
-    // std::cout << "Creating file " << tmpname << std::endl;
-
     std::string pipe_name  = "server";
 
     HANDLE pipe = ::CreateNamedPipe(("\\\\.\\pipe\\" + pipe_name).c_str(),
@@ -609,19 +578,6 @@ _handle_pipe(Connection* cx)
     }
 }
 
-inline void
-WindowsTcpSocket::reset_wsa_event(HANDLE event)
-{
-    if (!::WSAResetEvent(event)) {
-        std::string error = _get_last_error("Unable to reset event.");
-
-        close_socket(server_socket);
-        // ::WSACloseEvent(ev_handle);
-
-        throw std::runtime_error(error.c_str());
-    }
-}
-
 static inline bool
 _is_set(std::vector<int> bits, int set)
 {
@@ -634,6 +590,19 @@ _is_set(std::vector<int> bits, int set)
     }
 
     return is_set;
+}
+
+inline void
+WindowsTcpSocket::reset_wsa_event(HANDLE event)
+{
+    if (!::WSAResetEvent(event)) {
+        std::string error = _get_last_error("Unable to reset event.");
+
+        close_socket(server_socket);
+        // ::WSACloseEvent(ev_handle);
+
+        throw std::runtime_error(error.c_str());
+    }
 }
 
 void
@@ -662,67 +631,68 @@ WindowsTcpSocket::open()
             // ::WSACloseEvent(ev_handle);
 
             throw std::runtime_error(error.c_str());
-        } else {
-            int index = select_result - WSA_WAIT_EVENT_0;
-            HANDLE ev_handle = handles.get()[index];
+        }
 
-            Connection* cx = _find_connection_by_event_handle(connections, ev_handle);
+        int    index     = select_result - WSA_WAIT_EVENT_0;
+        HANDLE ev_handle = handles.get()[index];
 
-            continue_if (cx == nullptr);
+        Connection* cx = _find_connection_by_event_handle(connections, ev_handle);
 
-            std::cout << "event from :" << *cx << std::endl;
+        continue_if (cx == nullptr);
 
-            WSANETWORKEVENTS networkEvents;
+        std::cout << "event from :" << *cx << std::endl;
 
-            if (::WSAEnumNetworkEvents(cx->socket, ev_handle, &networkEvents) == SOCKET_ERROR) {
-                ::ResetEvent(cx->pipe);
-                _handle_pipe(cx);
-                continue;
-            }
+        WSANETWORKEVENTS networkEvents;
 
-            reset_wsa_event(cx->event);
+        if (::WSAEnumNetworkEvents(cx->socket, ev_handle, &networkEvents) == SOCKET_ERROR) {
+            ::ResetEvent(cx->pipe);
+            _handle_pipe(cx);
 
-            sockaddr_storage client_addr;
+            continue;
+        }
 
-            if (_is_set({FD_ACCEPT}, networkEvents.lNetworkEvents)) {
-                std::cout << "accept\n";
-                socklen_t storage_size = sizeof(client_addr);
-                SOCKET    client       = accept(cx->socket, (sockaddr*) & client_addr, &storage_size);
+        reset_wsa_event(cx->event);
 
-                // receive_data(client);
-                // write_data(client);
-                // close_socket(client);
-                auto client_con = _create_connection(client);
-                client_con->name = "client";
-                connections.push_back(std::shared_ptr<Connection>(client_con));
-            }
+        sockaddr_storage client_addr;
 
-            if (_is_set({FD_OOB, FD_READ}, networkEvents.lNetworkEvents)) {
-                std::cout << "read\n";
+        if (_is_set({FD_ACCEPT}, networkEvents.lNetworkEvents)) {
+            std::cout << "accept\n";
+            socklen_t storage_size = sizeof(client_addr);
+            SOCKET    client       = accept(cx->socket, (sockaddr*)&client_addr, &storage_size);
 
-                receive_data(cx->socket);
-                cx->is_read = true;
-            }
+            // receive_data(client);
+            // write_data(client);
+            // close_socket(client);
+            auto client_con = _create_connection(client);
+            client_con->name = "client";
+            connections.push_back(std::shared_ptr<Connection>(client_con));
+        }
 
-            if (_is_set({FD_WRITE}, networkEvents.lNetworkEvents)) {
-                std::cout << "write\n";
+        if (_is_set({FD_OOB, FD_READ}, networkEvents.lNetworkEvents)) {
+            std::cout << "read\n";
+
+            receive_data(cx->socket);
+            cx->is_read = true;
+        }
+
+        if (_is_set({FD_WRITE}, networkEvents.lNetworkEvents)) {
+            std::cout << "write\n";
 
 
-                if (cx->is_read) {
-                    write_data(cx->socket);
-                    close_socket(cx->socket);
-                    _remove_connection(connections, cx);
-                }
-            }
-
-            if (_is_set({FD_CLOSE}, networkEvents.lNetworkEvents)) {
-                std::cout << "close\n";
+            if (cx->is_read) {
+                write_data(cx->socket);
+                close_socket(cx->socket);
                 _remove_connection(connections, cx);
             }
+        }
 
-            if (!_is_set({FD_ACCEPT, FD_OOB, FD_READ, FD_WRITE, FD_CLOSE}, networkEvents.lNetworkEvents)) {
-                std::cout << "default (" << networkEvents.lNetworkEvents << ")\n";
-            }
+        if (_is_set({FD_CLOSE}, networkEvents.lNetworkEvents)) {
+            std::cout << "close\n";
+            _remove_connection(connections, cx);
+        }
+
+        if (!_is_set({FD_ACCEPT, FD_OOB, FD_READ, FD_WRITE, FD_CLOSE}, networkEvents.lNetworkEvents)) {
+            std::cout << "default (" << networkEvents.lNetworkEvents << ")\n";
         }
     }
 }
