@@ -44,8 +44,6 @@ public:
     void close();
 
 private:
-    addrinfo* get_addrinfo(const char*);
-    void create_socket(addrinfo*);
     void close_socket(SOCKET);
     bool select();
     void receive_data(SOCKET);

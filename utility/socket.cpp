@@ -172,7 +172,7 @@ _close_socket(int socket)
 }
 
 SOCKET
-create_socket(const char* host, const char* service)
+create_and_bind_socket(const char* host, const char* service)
 {
     addrinfo* server_info = nullptr;
 
@@ -188,10 +188,10 @@ create_socket(const char* host, const char* service)
         return INVALID_SOCKET;
     }
 
-    int bind_result = SOCKET_NOERROR;
+    int    bind_result   = SOCKET_NOERROR;
     SOCKET server_socket = INVALID_SOCKET;
-    bool is_open = false;
-    int last_error = 0;
+    bool   is_open       = false;
+    int    last_error    = 0;
 
     for (addrinfo* p = server_info; p != nullptr; p = p->ai_next) {
         last_error = errno;
@@ -238,9 +238,9 @@ create_socket(const char* host, const char* service)
 }
 
 SOCKET
-create_socket(const char* host, const int port)
+create_and_bind_socket(const char* host, const int port)
 {
-    return create_socket(host, std::to_string(port).c_str());
+    return create_and_bind_socket(host, std::to_string(port).c_str());
 }
 
 }}}}

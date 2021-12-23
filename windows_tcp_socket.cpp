@@ -268,29 +268,6 @@ WindowsTcpSocket::~WindowsTcpSocket() noexcept
 #endif
 }
 
-addrinfo*
-WindowsTcpSocket::get_addrinfo(const char* server_address)
-{
-    addrinfo* server_info;
-    addrinfo hints = {0};
-
-    hints.ai_family   = AF_UNSPEC;
-    hints.ai_socktype = SOCK_STREAM;
-    hints.ai_protocol = protocol; // 0 = ANY
-    hints.ai_flags    = AI_PASSIVE;
-
-    int result = 0;
-
-    if ((result = ::getaddrinfo(server_address, port.c_str(), &hints, &server_info)) != SOCKET_NOERROR) {
-        std::string error = _get_last_error("Failed to get information about the specified network port/service '" + port + "'.");
-
-        throw std::runtime_error(error.c_str());
-    }
-
-
-    return server_info;
-}
-
 static bool
 _connect_to_client(HANDLE pipe, OVERLAPPED* overlapped)
 {
@@ -393,43 +370,17 @@ _create_pipe()
 }
 
 void
-WindowsTcpSocket::create_socket(addrinfo* server_info)
+WindowsTcpSocket::bind(const char* server_address, const char* service)
 {
-    int bind_result = SOCKET_NOERROR;
-    server_socket = INVALID_SOCKET;
+    Connection* pipe = _create_pipe();
+    pipe->name = "pipe";
 
-    for (addrinfo* p = server_info; p != nullptr; p = p->ai_next) {
-        if (is_open) {
-            close_socket(server_socket);
+    connections.push_back(std::shared_ptr<Connection>(pipe));
 
-            is_open = false;
-        }
-
-        continue_if ((server_socket = ::socket(p->ai_family, p->ai_socktype, p->ai_protocol)) == INVALID_SOCKET);
-
-        static const char ONE             = '1';
-        int               REUSE_PORT_ADDR = SO_REUSEADDR;
-
-        is_open = true;
-
-        break_if (::setsockopt(server_socket, SOL_SOCKET, REUSE_PORT_ADDR, &ONE, sizeof(ONE)) != SOCKET_ERROR &&
-                  (bind_result = ::bind(server_socket, p->ai_addr, p->ai_addrlen)) != SOCKET_ERROR);
-    }
-
-    server_info = nullptr;
+    server_socket = nt::http::utility::socket::create_and_bind_socket(server_address, service);
 
     if (server_socket == INVALID_SOCKET) {
         std::string error = _get_last_error("Failed to create socket.");
-
-        throw std::runtime_error(error.c_str());
-    }
-
-    if (bind_result == SOCKET_ERROR) {
-        std::string error = _get_last_error("Failed to bind port/service " + port + ".");
-
-        close_socket(server_socket);
-
-        is_open = false;
 
         throw std::runtime_error(error.c_str());
     }
@@ -442,34 +393,13 @@ WindowsTcpSocket::create_socket(addrinfo* server_info)
         throw std::runtime_error(error.c_str());
     }
 
+    port = service;
+
 #ifdef HTTP_WEB_SERVER_SOCKET_DEBUG
     std::cout << "listening to port " << bound_port << std::endl;
 #endif
 
     is_open = true;
-}
-
-void
-WindowsTcpSocket::bind(const char* server_address, const char* service)
-{
-    addrinfo* server_info = nullptr;
-
-    ______________________________________________________________
-              if (server_info != nullptr) {
-                  freeaddrinfo(server_info);
-              }
-    _____________________________________________________________;
-
-    port = service;
-
-    server_info = get_addrinfo(server_address);
-
-    Connection* pipe = _create_pipe();
-    pipe->name = "pipe";
-
-    connections.push_back(std::shared_ptr<Connection>(pipe));
-
-    create_socket(server_info);
 }
 
 void

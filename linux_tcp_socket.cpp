@@ -279,7 +279,7 @@ LinuxTcpSocket::bind(const char* server_address, const char* service)
         connections.push_back(std::shared_ptr<Connection>(pipe));
     }
 
-    server_socket = nt::http::utility::socket::create_socket(server_address, service);
+    server_socket = nt::http::utility::socket::create_and_bind_socket(server_address, service);
 
     if (server_socket == INVALID_SOCKET) {
         std::string error = _get_last_error("Failed to create socket.");
