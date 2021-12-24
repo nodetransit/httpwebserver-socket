@@ -107,7 +107,7 @@ get_bound_port(SOCKET socket)
 
     socklen_t addrlen = (socklen_t)sizeof(sin);
 
-    if (::getsockname(socket, (sockaddr * ) & sin, &addrlen) != SOCKET_NOERROR) {
+    if (::getsockname(socket, (sockaddr*)&sin, &addrlen) != SOCKET_NOERROR) {
         return SOCKET_ERROR;
     }
 
