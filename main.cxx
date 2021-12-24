@@ -5,6 +5,7 @@
 #include <typeinfo>
 
 #include "tcp_socket.hpp"
+#include "raw_socket.hpp"
 
 static void
 callback(void*, void*)
@@ -35,11 +36,29 @@ _main()
     run(s);
 }
 
+static void
+_main_raw()
+{
+    auto socket = std::make_unique<nt::http::RawSocket>();
+
+    socket->bind("0.0.0.0", "http");
+    socket->listen(8);
+
+    auto client = std::unique_ptr<nt::http::RawSocket>(socket->accept());
+
+    char buffer[MAX_INPUT] = {0};
+
+    ::recv(client->socket, buffer, sizeof(buffer) - 1, 0);
+
+    std::cout << buffer;
+}
+
 int
 main(int, char**)
 {
     try {
         _main();
+        // _main_raw();
         return EXIT_SUCCESS;
     } catch (std::bad_cast& ex) {
         std::cout << "dynamic cast failed" << std::endl;

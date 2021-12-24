@@ -61,7 +61,8 @@ _close_socket(int socket)
 }
 
 RawSocket::RawSocket() :
-      socket(INVALID_SOCKET),
+      socket(_socket),
+      _socket(INVALID_SOCKET),
       port(SOCKET_ERROR)
 {
 #ifdef LOSE
@@ -70,7 +71,8 @@ RawSocket::RawSocket() :
 }
 
 RawSocket::RawSocket(int s) :
-      socket(s),
+      socket(_socket),
+      _socket(s),
       port(SOCKET_ERROR)
 {
 #ifdef LOSE
@@ -80,18 +82,18 @@ RawSocket::RawSocket(int s) :
 
 RawSocket::~RawSocket()
 {
-    if (socket != INVALID_SOCKET) {
-        _close_socket(socket);
+    if (_socket != INVALID_SOCKET) {
+        _close_socket(_socket);
+    }
 
 #ifdef LOSE
-        if (::WSACleanup() == SOCKET_ERROR) {
-            std::string error = _get_last_error("Failed to clean up.");
+    if (::WSACleanup() == SOCKET_ERROR) {
+        std::string error = _get_last_error("Failed to clean up.");
 
-            std::cerr << error << std::endl;
-            // throw std::runtime_error(error.c_str());
-        }
-#endif
+        std::cerr << error << std::endl;
+        // throw std::runtime_error(error.c_str());
     }
+#endif
 }
 
 int
@@ -106,7 +108,7 @@ RawSocket::get_port()
     sockaddr* addr = reinterpret_cast<sockaddr*>(&sin);
     socklen_t addrlen = (socklen_t)sizeof(sin);
 
-    if (::getsockname(socket, addr, &addrlen) != SOCKET_NOERROR) {
+    if (::getsockname(_socket, addr, &addrlen) != SOCKET_NOERROR) {
         port = SOCKET_ERROR;
     } else {
         port = ntohs(sin.sin_port);
@@ -144,10 +146,10 @@ RawSocket::bind(const char* host, const char* service)
     }
     _____________________________________________________________;
 
-    if(socket != INVALID_SOCKET) {
-        _close_socket(socket);
+    if(_socket != INVALID_SOCKET) {
+        _close_socket(_socket);
 
-        socket = INVALID_SOCKET;
+        _socket = INVALID_SOCKET;
     }
 
     server_info = _get_addrinfo(host, service);
@@ -162,13 +164,13 @@ RawSocket::bind(const char* host, const char* service)
     for (addrinfo* p = server_info; p != nullptr; p = p->ai_next) {
         last_error = errno;
 
-        if (socket != INVALID_SOCKET) {
-            _close_socket(socket);
+        if (_socket != INVALID_SOCKET) {
+            _close_socket(_socket);
 
             _set_errno(last_error);
         }
 
-        continue_if ((socket = ::socket(p->ai_family, p->ai_socktype, p->ai_protocol)) == INVALID_SOCKET);
+        continue_if ((_socket = ::socket(p->ai_family, p->ai_socktype, p->ai_protocol)) == INVALID_SOCKET);
 
 #ifdef LOSE
         int REUSE_PORT_ADDR = SO_REUSEADDR;
@@ -177,19 +179,19 @@ RawSocket::bind(const char* host, const char* service)
 #endif
 
         break_if(set_option<int>(SOL_SOCKET, REUSE_PORT_ADDR, 1) != SOCKET_ERROR &&
-                 (bind_result = ::bind(socket, p->ai_addr, p->ai_addrlen)) != SOCKET_ERROR);
+                 (bind_result = ::bind(_socket, p->ai_addr, p->ai_addrlen)) != SOCKET_ERROR);
     }
 
-    if (socket == INVALID_SOCKET) {
+    if (_socket == INVALID_SOCKET) {
         throw std::runtime_error("Failed to create socket.");
     }
 
     if (bind_result == SOCKET_ERROR) {
         last_error = errno;
 
-        _close_socket(socket);
+        _close_socket(_socket);
 
-        socket = INVALID_SOCKET;
+        _socket = INVALID_SOCKET;
 
         _set_errno(last_error);
 
@@ -207,7 +209,7 @@ RawSocket::bind(const char* host, const unsigned short port)
 void
 RawSocket::listen(const unsigned int count)
 {
-    int listen_result = ::listen(socket, count);
+    int listen_result = ::listen(_socket, count);
 
     if (listen_result == SOCKET_ERROR) {
         std::string error = std::string("Failed to listen to port/service '") + std::to_string(port) + "'.";
@@ -223,7 +225,7 @@ RawSocket::accept()
     sockaddr* addr = reinterpret_cast<sockaddr*>(&client_addr);
     socklen_t storage_size = sizeof(client_addr);
 
-    int client = ::accept(socket, addr, &storage_size);
+    int client = ::accept(_socket, addr, &storage_size);
 
     return new RawSocket(client);
 }
@@ -231,5 +233,5 @@ RawSocket::accept()
 void
 RawSocket::close()
 {
-    _close_socket(socket);
+    _close_socket(_socket);
 }

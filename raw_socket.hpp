@@ -9,8 +9,10 @@ namespace nt { namespace http {
 
 class __HttpWebServerSocketPort__ RawSocket
 {
+public:
+    const int& socket;
 private:
-    int socket;
+    int _socket;
     int port;
 public:
     RawSocket();
