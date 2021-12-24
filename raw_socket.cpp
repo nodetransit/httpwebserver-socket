@@ -16,10 +16,8 @@ _wsa_startup()
 {
     WSADATA wsaData = {0};
 
-    if ((ret = ::WSAStartup(MAKEWORD(2, 2), &wsaData)) != 0) {
-        std::string error = _get_last_error("Failed to start up.");
-
-        throw std::runtime_error(error.c_str());
+    if (::WSAStartup(MAKEWORD(2, 2), &wsaData) != 0) {
+        throw std::runtime_error("Failed to start up.");
     }
 }
 #endif
@@ -88,9 +86,7 @@ RawSocket::~RawSocket()
 
 #ifdef LOSE
     if (::WSACleanup() == SOCKET_ERROR) {
-        std::string error = _get_last_error("Failed to clean up.");
-
-        std::cerr << error << std::endl;
+        std::cerr << "Failed to clean up." << std::endl;
         // throw std::runtime_error(error.c_str());
     }
 #endif
@@ -173,13 +169,15 @@ RawSocket::bind(const char* host, const char* service)
         continue_if ((_socket = ::socket(p->ai_family, p->ai_socktype, p->ai_protocol)) == INVALID_SOCKET);
 
 #ifdef LOSE
-        int REUSE_PORT_ADDR = SO_REUSEADDR;
+        static const char ONE             = '1';
+        int               REUSE_PORT_ADDR = SO_REUSEADDR;
 #else
-        int REUSE_PORT_ADDR = SO_REUSEPORT;
+        static const int  ONE             = 1;
+        int               REUSE_PORT_ADDR = SO_REUSEPORT;
 #endif
 
-        break_if(set_option<int>(SOL_SOCKET, REUSE_PORT_ADDR, 1) != SOCKET_ERROR &&
-                 (bind_result = ::bind(_socket, p->ai_addr, p->ai_addrlen)) != SOCKET_ERROR);
+        break_if (::setsockopt(_socket, SOL_SOCKET, REUSE_PORT_ADDR, &ONE, sizeof(ONE)) != SOCKET_ERROR &&
+                  (bind_result = ::bind(_socket, p->ai_addr, p->ai_addrlen)) != SOCKET_ERROR);
     }
 
     if (_socket == INVALID_SOCKET) {

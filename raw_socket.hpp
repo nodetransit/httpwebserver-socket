@@ -19,12 +19,6 @@ public:
     RawSocket(int);
     ~RawSocket();
 
-    template<typename T>
-    int set_option(const int level, const int option, const T value)
-    {
-        return ::setsockopt(socket, level, option, &value, sizeof(T));
-    }
-
     int get_port();
     void bind(const char*, const char*);
     void bind(const char*, const unsigned short);
