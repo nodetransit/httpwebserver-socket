@@ -112,6 +112,7 @@ set (SOURCE_FILES "interfaces/socket.cpp"
                   "utility/socket.cpp"
                   "timeval.cpp"
                   "connection.cpp"
+                  "overlapped_event.cpp"
                   "raw_socket.cpp"
                   "tcp_socket.cpp"
                   "udp_socket.cpp")
