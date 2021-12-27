@@ -86,6 +86,8 @@ Pipe::close()
         ::CloseHandle(_handle);
         _handle = INVALID_HANDLE_VALUE;
     }
+
+    ::DisconnectNamedPipe(_handle);
 #else
     if (_handle != -1) {
         ::close(_handle);

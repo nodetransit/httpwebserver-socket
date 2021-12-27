@@ -2,69 +2,42 @@
 
 using namespace nt::http;
 
-Connection::Connection(const SOCKET n) :
-      close(false),
-      socket(n),
-#ifdef LOSE
-      event(INVALID_HANDLE_VALUE),
-      pipe(INVALID_HANDLE_VALUE),
-      overlapped(nullptr),
-#endif
-      is_read(false),
-      name("")
+
+
+Connection*
+Connection::create_socket()
 {
+    auto cx = new Connection();
+
+    cx->socket  = std::make_shared<RawSocket>();
+    cx->event   = std::make_shared<OverlappedEvent>(cx->socket.get());
+    cx->is_read = false;
+
+    return cx;
 }
 
-#ifdef LOSE
-Connection::Connection(const SOCKET n, const HANDLE h) :
-      close(false),
-      socket(n),
-      event(h),
-      pipe(INVALID_HANDLE_VALUE),
-      overlapped(nullptr),
-      is_read(false),
-      name("")
+Connection*
+Connection::create_socket(std::shared_ptr<RawSocket>& s)
 {
+    auto cx = new Connection();
+
+    cx->socket  = s;
+    cx->event   = std::make_shared<OverlappedEvent>(cx->socket.get());
+    cx->is_read = false;
+
+    return cx;
 }
 
-Connection::Connection(const SOCKET n, const HANDLE h, const HANDLE p, OVERLAPPED* o) :
-      close(false),
-      socket(n),
-      event(h),
-      pipe(p),
-      overlapped(o),
-      is_read(false),
-      name("")
+Connection*
+Connection::create_pipe(const std::string& pipe_name)
 {
-}
-#endif
+    auto cx = new Connection();
 
-Connection::~Connection() noexcept
-{
-    if(socket != INVALID_SOCKET) {
-#ifdef LOSE
-        ::shutdown(socket, SD_BOTH);
-        ::closesocket(socket);
-#else
-        // todo check if shutdown will cause an error on pipes
-        ::shutdown(socket, SHUT_RDWR);
-        ::close(socket);
-#endif
-    }
+    cx->pipe    = std::make_shared<Pipe>(pipe_name);
+    cx->event   = std::make_shared<OverlappedEvent>();
+    cx->is_read = false;
 
-#ifdef LOSE
-    if (event != INVALID_HANDLE_VALUE) {
-        ::CloseHandle(event);
-    }
-
-    if (overlapped != nullptr) {
-        delete overlapped;
-    };
-
-    if (pipe != INVALID_HANDLE_VALUE) {
-        ::CloseHandle(pipe);
-    }
-#endif
+    return cx;
 }
 
 namespace nt { namespace http {
@@ -79,7 +52,7 @@ operator<<(std::ostream& out, const Connection& con)
 
     }
 
-    out << " (" << static_cast<int>(con.socket) << ")";
+    // out << " (" << static_cast<int>(con.socket) << ")";
 
     return out;
 }

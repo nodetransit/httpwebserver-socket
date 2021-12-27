@@ -14,8 +14,8 @@ using namespace nt::http;
 #ifdef LOSE
 OverlappedEvent::OverlappedEvent() :
       handle(_handle),
-      _handle(INVALID_HANDLE_VALUE),
       overlapped(_overlapped),
+      _handle(INVALID_HANDLE_VALUE),
       _overlapped({0}),
       socket(nullptr)
 {
@@ -30,8 +30,8 @@ OverlappedEvent::OverlappedEvent() :
 
 OverlappedEvent::OverlappedEvent(RawSocket* socket) :
       handle(_handle),
-      _handle(INVALID_HANDLE_VALUE),
       overlapped(_overlapped),
+      _handle(INVALID_HANDLE_VALUE),
       _overlapped({0}),
       socket(socket)
 {
@@ -59,7 +59,7 @@ OverlappedEvent::set()
     } else {
         int select_result = ::WSAEventSelect(socket->socket,
                                              _handle,
-                                             FD_ACCEPT | FD_READ // | FD_WRITE | FD_CLOSE
+                                             FD_ACCEPT | FD_READ | FD_WRITE | FD_CLOSE
                                             );
 
         if (select_result == SOCKET_ERROR) {

@@ -17,7 +17,6 @@ public:
 private:
     HANDLE _handle;
     OVERLAPPED _overlapped;
-    OVERLAPPED* __overlapped;
     RawSocket * socket;
 public:
     OverlappedEvent();

@@ -136,11 +136,11 @@ RawSocket::bind(const char* host, const char* service)
 {
     addrinfo* server_info = nullptr;
 
-    ______________________________________________________________
-    if (server_info != nullptr) {
-        freeaddrinfo(server_info);
-    }
-    _____________________________________________________________;
+    ON_SCOPE_EXIT [&]{
+        if (server_info != nullptr) {
+            freeaddrinfo(server_info);
+        }
+    };
 
     if(_socket != INVALID_SOCKET) {
         _close_socket(_socket);
@@ -215,7 +215,7 @@ RawSocket::listen(const unsigned int count)
     }
 }
 
-RawSocket*
+std::shared_ptr<RawSocket>
 RawSocket::accept()
 {
     sockaddr_storage client_addr = {0};
@@ -225,7 +225,7 @@ RawSocket::accept()
 
     int client = ::accept(_socket, addr, &storage_size);
 
-    return new RawSocket(client);
+    return std::make_shared<RawSocket>(client);
 }
 
 void

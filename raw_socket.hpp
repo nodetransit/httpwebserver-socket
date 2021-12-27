@@ -1,6 +1,8 @@
 #ifndef HTTPWEBSERVER_RAW_SOCKET_HPP__
 #define HTTPWEBSERVER_RAW_SOCKET_HPP__
 
+#include <memory>
+
 #include "common.hpp"
 #include "interfaces/socket.hpp"
 
@@ -23,7 +25,7 @@ public:
     void bind(const char*, const char*);
     void bind(const char*, const unsigned short);
     void listen(const unsigned int);
-    RawSocket* accept();
+    std::shared_ptr<RawSocket> accept();
     void close();
 };
 
