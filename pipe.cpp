@@ -3,7 +3,20 @@
 #include "common.hpp"
 #include "timeval.hpp"
 
+#ifdef LINUX
+#    include <sys/stat.h>
+#endif
+
+
 using namespace nt::http;
+
+static inline bool
+_file_exists(const char* name)
+{
+    struct stat buf;
+
+    return ::stat(name, &buf) == 0;
+}
 
 Pipe::Pipe(const std::string& pipe_name) :
       name(""),
@@ -30,8 +43,12 @@ Pipe::Pipe(const std::string& pipe_name) :
     static const unsigned int NUMBER_OF_THE_BEAST = 0600;
     name = "/tmp/" + pipe_name;
 
-    if(::mkfifo(name.c_str(), NUMBER_OF_THE_BEAST) == -1) {
-        throw std::runtime_error("Failed to create communication pipe.");
+    if (_file_exists(name.c_str()) && ::unlink(name.c_str()) == -1) {
+        throw std::runtime_error("Failed to delete existing communication pipe '" + pipe_name + "'.");
+    }
+
+    if (::mkfifo(name.c_str(), NUMBER_OF_THE_BEAST) == -1) {
+        throw std::runtime_error("Failed to create communication pipe '" + pipe_name + "'.");
     }
 
 #endif
@@ -69,17 +86,16 @@ Pipe::open(OverlappedEvent* event)
         }
     }
 #else
-    pipe = ::open(name, O_RDWR | O_NONBLOCK);
+    _handle = ::open(name.c_str(), O_RDWR | O_NONBLOCK);
 
-    if(pipe == -1) {
+    if (_handle == -1) {
         throw std::runtime_error("Failed to open communication pipe.");
     }
 #endif
 }
 
 void
-Pipe::close()
-
+Pipe::close() noexcept
 {
 #ifdef LOSE
     if (_handle != INVALID_HANDLE_VALUE) {
@@ -92,6 +108,10 @@ Pipe::close()
     if (_handle != -1) {
         ::close(_handle);
         _handle = -1;
+    }
+
+    if (::unlink(name.c_str()) == -1) {
+        std::cerr << "Failed to delete existing communication pipe '" << name << "'." << std::endl;
     }
 #endif
 }

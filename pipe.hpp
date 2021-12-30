@@ -5,6 +5,7 @@
 #include "overlapped_event.hpp"
 #include "interfaces/socket.hpp"
 
+
 namespace nt { namespace http {
 
 
@@ -27,10 +28,10 @@ private:
 
 public:
     Pipe(const std::string&);
-    ~Pipe();
+    ~Pipe() noexcept;
 
     void open(OverlappedEvent*);
-    void close();
+    void close() noexcept;
 };
 
 }}

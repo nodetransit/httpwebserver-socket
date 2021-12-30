@@ -6,6 +6,7 @@
 
 #include "tcp_socket.hpp"
 #include "raw_socket.hpp"
+#include "pipe.hpp"
 
 static void
 callback(void*, void*)

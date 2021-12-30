@@ -21,7 +21,15 @@ private:
 public:
     OverlappedEvent();
     OverlappedEvent(RawSocket*);
-    ~OverlappedEvent();
+    ~OverlappedEvent() noexcept;
+
+    void set();
+    void reset();
+#else
+public:
+    OverlappedEvent() = default;
+    OverlappedEvent(RawSocket*);
+    ~OverlappedEvent() noexcept = default;
 
     void set();
     void reset();

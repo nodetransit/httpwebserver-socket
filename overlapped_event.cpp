@@ -42,7 +42,7 @@ OverlappedEvent::OverlappedEvent(RawSocket* socket) :
     }
 }
 
-OverlappedEvent::~OverlappedEvent()
+OverlappedEvent::~OverlappedEvent() noexcept
 {
     if (_handle != INVALID_HANDLE_VALUE) {
         ::CloseHandle(_handle);
@@ -83,5 +83,19 @@ OverlappedEvent::reset()
             throw std::runtime_error("Unable to reset wsa event.");
         }
     }
+}
+#else
+OverlappedEvent::OverlappedEvent(RawSocket* socket)
+{
+}
+
+void
+OverlappedEvent::set()
+{
+}
+
+void
+OverlappedEvent::reset()
+{
 }
 #endif
