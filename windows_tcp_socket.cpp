@@ -172,7 +172,7 @@ _get_connection_handles(const std::vector<std::shared_ptr<Connection>> &connecti
 
     int i = 0;
     for (auto &connection : connections) {
-        handles[i++] = connection->event;
+        handles[i++] = connection->event->handle;
     }
 
     return handles;
@@ -182,7 +182,7 @@ static Connection*
 _find_connection_by_event_handle(const std::vector<std::shared_ptr<Connection>> &connections, HANDLE handle)
 {
     for (auto &connection : connections) {
-        if (connection->event == handle) {
+        if (connection->event->handle == handle) {
             return connection.get();
         }
     }
@@ -231,200 +231,47 @@ _tls()
 }
 
 WindowsTcpSocket::WindowsTcpSocket() :
-      port("0"),
-      queue_count(0),
-      max_connections(FD_SETSIZE - 1),
-      server_socket(0),
-      is_open(false),
-      protocol(0)
+      max_connections(FD_SETSIZE - 1)
 {
     _tls();
 
     connections.reserve(max_connections);
 
-    int     ret;
-    WSADATA wsaData;
+    auto server_con = Connection::create_socket();
+    auto pipe_con = Connection::create_pipe("server");
 
-    if ((ret = ::WSAStartup(MAKEWORD(2, 2), &wsaData)) != 0) {
-        std::string error = _get_last_error("Failed to start up.");
+    server_con->name = "web server";
+    pipe_con->name   = "inbound pipe";
 
-        throw std::runtime_error(error.c_str());
-    }
+    server = std::shared_ptr<Connection>(server_con);
+    pipe   = std::shared_ptr<Connection>(pipe_con);
 }
 
 WindowsTcpSocket::~WindowsTcpSocket() noexcept
 {
-    if (is_open) {
-        close();
-    }
-
-#ifdef LOSE
-    if (::WSACleanup() == SOCKET_ERROR) {
-        std::string error = _get_last_error("Failed to clean up.");
-
-        std::cerr << error << std::endl;
-        // throw std::runtime_error(error.c_str());
-    }
-#endif
-}
-
-static bool
-_connect_to_client(HANDLE pipe, OVERLAPPED* overlapped)
-{
-    if (!::ConnectNamedPipe(pipe, overlapped)) {
-        int error = ::GetLastError();
-
-        switch (error) {
-        case ERROR_IO_PENDING:
-            // std::cout << "The overlapped connection in progress\n";
-            break;
-
-        case ERROR_PIPE_CONNECTED: // Client is already connected, so signal an event.
-            if (::SetEvent(overlapped->hEvent)) {
-                break;
-            }
-
-        case ERROR_PIPE_LISTENING:
-            std::cout << "Pipe is listening\n";
-            break;
-
-        default: { // If an error occurs during the connect operation...
-            std::cout << "Failed to make connection on named pipe. "
-                      << _get_last_error_message(error)
-                      << std::endl;
-            ::CloseHandle(pipe);
-            return false;
-        }
-        }
-    }
-
-    return true;
-}
-
-static Connection*
-_create_pipe()
-{
-    std::string pipe_name  = "server";
-
-    HANDLE pipe = ::CreateNamedPipe(("\\\\.\\pipe\\" + pipe_name).c_str(),
-                                    PIPE_ACCESS_DUPLEX | FILE_FLAG_OVERLAPPED,
-                                    PIPE_TYPE_BYTE | PIPE_READMODE_BYTE | PIPE_WAIT,
-                                    1, // PIPE_UNLIMITED_INSTANCES,
-                                    0, 0, 1000,
-                                    nullptr);
-
-    if (pipe == nullptr || pipe == INVALID_HANDLE_VALUE) {
-        std::cout << "Failed to create outbound pipe instance. "
-                  << _get_last_error_message()
-                  << std::endl;
-        return nullptr;
-    }
-
-    OVERLAPPED* overlapped = new OVERLAPPED();
-    overlapped->hEvent = ::CreateEvent(nullptr, true, false, nullptr);
-    if (overlapped->hEvent == nullptr) {
-        std::cout << "Failed to create event. "
-                  << _get_last_error_message()
-                  << std::endl;
-        return nullptr;
-    }
-
-    if (!_connect_to_client(pipe, overlapped)) {
-        return nullptr;
-    }
-
-    std::cout << "pipe name: " << pipe_name << std::endl;
-
-    return new Connection(INVALID_SOCKET, overlapped->hEvent, pipe, overlapped);
 }
 
 void
-WindowsTcpSocket::bind(const char* server_address, const char* service)
+WindowsTcpSocket::bind(const char* address, const char* service)
 {
-    Connection* pipe = _create_pipe();
-    pipe->name = "pipe";
-
-    connections.push_back(std::shared_ptr<Connection>(pipe));
-
-    server_socket = nt::http::utility::socket::create_and_bind_socket(server_address, service);
-
-    if (server_socket == INVALID_SOCKET) {
-        std::string error = _get_last_error("Failed to create socket.");
-
-        throw std::runtime_error(error.c_str());
-    }
-
-    int bound_port = nt::http::utility::socket::get_bound_port(server_socket);
-
-    if (bound_port == SOCKET_ERROR) {
-        std::string error = _get_last_error("Unable to get bound port.");
-
-        throw std::runtime_error(error.c_str());
-    }
-
-    port = service;
-
-#ifdef HTTP_WEB_SERVER_SOCKET_DEBUG
-    std::cout << "listening to port " << bound_port << std::endl;
-#endif
-
-    is_open = true;
+    server->socket->bind(address, service);
 }
 
 void
-WindowsTcpSocket::bind(const char* server_address, const unsigned short port_no)
+WindowsTcpSocket::bind(const char* address, const unsigned short port_no)
 {
-    bind(server_address, std::to_string(port_no).c_str());
-}
-
-static Connection*
-_create_connection(SOCKET socket)
-{
-    //HANDLE ev_handle = ::CreateEvent(nullptr, true, true, nullptr);
-    HANDLE ev_handle = ::WSACreateEvent();
-
-    std::cout << "server event handle :" << ev_handle << "\n";
-
-    if(ev_handle == WSA_INVALID_EVENT) {
-        std::string error = _get_last_error("Failed to create event.");
-
-        throw std::runtime_error(error.c_str());
-    }
-
-    int select_result = ::WSAEventSelect(socket,
-                                         ev_handle,
-                                         FD_ACCEPT | FD_READ | FD_WRITE | FD_CLOSE);
-
-    if (select_result == SOCKET_ERROR) {
-        std::string error = _get_last_error("Failed to select WSA event.");
-
-        throw std::runtime_error(error.c_str());
-    }
-
-    tthread::this_thread::sleep_for(tthread::chrono::microseconds(0));
-
-    return new Connection(socket, ev_handle);
+    server->socket->bind(address, port_no);
 }
 
 void
 WindowsTcpSocket::listen(const unsigned int count, event_callback callback)
 {
-    queue_count = count;
+    server->socket->listen(count);
+    server->event->set();
+    pipe->event->set();
 
-    int listen_result = ::listen(server_socket, queue_count);
-
-    if (listen_result == SOCKET_ERROR) {
-        std::string error = _get_last_error("Failed to listen to port/service " + port + ".");
-
-        close_socket(server_socket);
-
-        throw std::runtime_error(error.c_str());
-    }
-
-    auto server_connection = _create_connection(server_socket);
-    server_connection->name = "web server";
-
-    connections.push_back(std::shared_ptr<Connection>(server_connection));
+    connections.push_back(server);
+    // connections.push_back(pipe);
 }
 
 void
@@ -525,10 +372,12 @@ WindowsTcpSocket::select()
 static void
 _handle_pipe(Connection* cx)
 {
-    if (cx->overlapped != nullptr) {
+    if (cx->pipe != nullptr) {
         DWORD bytes_read;
-        bool get_result = GetOverlappedResult(cx->event,
-                                              cx->overlapped,
+        auto overlapped = const_cast<LPOVERLAPPED>(&cx->event->overlapped);
+
+        bool get_result = GetOverlappedResult(cx->event->handle,
+                                              overlapped,
                                               &bytes_read,
                                               false);
 
@@ -546,7 +395,7 @@ _handle_pipe(Connection* cx)
 
                 char read_buff[100] = {0};
 
-                if (::ReadFile(cx->pipe, read_buff, 99, nullptr, cx->overlapped)) {
+                if (::ReadFile(cx->pipe->handle, read_buff, 99, nullptr, overlapped)) {
                     std::cout << "read " << std::string(read_buff) << std::endl;
 
                     cx->is_read = true;
@@ -558,7 +407,7 @@ _handle_pipe(Connection* cx)
             } else {
                 char read_buff[100] = "reply\n";
 
-                if(!::WriteFile(cx->pipe, read_buff, 100, nullptr, cx->overlapped)) {
+                if(!::WriteFile(cx->pipe->handle, read_buff, 100, nullptr, overlapped)) {
                     pipe_closed = true;
                 }
 
@@ -572,8 +421,8 @@ _handle_pipe(Connection* cx)
             // int error = ::GetLastError();
             // std::cout << _get_last_error_message(error) << std::endl;
             std::cout << "reconnecting to pipe\n";
-            ::DisconnectNamedPipe(cx->pipe);
-            _connect_to_client(cx->pipe, cx->overlapped);
+            cx->pipe->close();
+            cx->pipe->open(cx->event.get());
         }
     }
 }
@@ -592,24 +441,9 @@ _is_set(std::vector<int> bits, int set)
     return is_set;
 }
 
-inline void
-WindowsTcpSocket::reset_wsa_event(HANDLE event)
-{
-    if (!::WSAResetEvent(event)) {
-        std::string error = _get_last_error("Unable to reset event.");
-
-        close_socket(server_socket);
-        // ::WSACloseEvent(ev_handle);
-
-        throw std::runtime_error(error.c_str());
-    }
-}
-
 void
 WindowsTcpSocket::open()
 {
-    unsigned int ceiling = 0;
-
     while (true) {
         std::cout << "listening from " << connections.size() << " connections\n";
 
@@ -627,9 +461,6 @@ WindowsTcpSocket::open()
         } else if (select_result == WAIT_TIMEOUT) {
             std::string error = _get_last_error("Timeout.");
 
-            close_socket(server_socket);
-            // ::WSACloseEvent(ev_handle);
-
             throw std::runtime_error(error.c_str());
         }
 
@@ -640,38 +471,45 @@ WindowsTcpSocket::open()
 
         continue_if (cx == nullptr);
 
-        std::cout << "event from :" << *cx << std::endl;
+        std::cout << "event from " << *cx << std::endl;
 
         WSANETWORKEVENTS networkEvents;
 
-        if (::WSAEnumNetworkEvents(cx->socket, ev_handle, &networkEvents) == SOCKET_ERROR) {
-            ::ResetEvent(cx->pipe);
+        if(cx->pipe != nullptr) {
+            std::cout << "handle pipe\n";
+            cx->event->reset();
             _handle_pipe(cx);
 
             continue;
         }
 
-        reset_wsa_event(cx->event);
+        if (::WSAEnumNetworkEvents(cx->socket->socket, cx->event->handle, &networkEvents) == SOCKET_ERROR) {
+            std::cout << "enumerate socket events error\n";
 
-        sockaddr_storage client_addr;
+            continue;
+        }
+
+        cx->event->reset();
 
         if (_is_set({FD_ACCEPT}, networkEvents.lNetworkEvents)) {
             std::cout << "accept\n";
-            socklen_t storage_size = sizeof(client_addr);
-            SOCKET    client       = accept(cx->socket, (sockaddr*)&client_addr, &storage_size);
+
+            auto client = cx->socket->accept();
 
             // receive_data(client);
             // write_data(client);
             // close_socket(client);
-            auto client_con = _create_connection(client);
-            client_con->name = "client";
+            auto client_con = Connection::create_socket(client);
+            client_con->event->set();
+            client_con->name = "client " + std::to_string(client.get()->socket);
+
             connections.push_back(std::shared_ptr<Connection>(client_con));
         }
 
         if (_is_set({FD_OOB, FD_READ}, networkEvents.lNetworkEvents)) {
             std::cout << "read\n";
 
-            receive_data(cx->socket);
+            receive_data(cx->socket->socket);
             cx->is_read = true;
         }
 
@@ -680,8 +518,7 @@ WindowsTcpSocket::open()
 
 
             if (cx->is_read) {
-                write_data(cx->socket);
-                close_socket(cx->socket);
+                write_data(cx->socket->socket);
                 _remove_connection(connections, cx);
             }
         }
@@ -700,31 +537,5 @@ WindowsTcpSocket::open()
 void
 WindowsTcpSocket::close()
 {
-    close_socket(server_socket);
-
-    is_open = false;
-}
-
-void
-WindowsTcpSocket::close_socket(SOCKET s)
-{
-    int shutdown_result = ::shutdown(s, SD_BOTH);
-
-    if (shutdown_result == SOCKET_ERROR && ::WSAGetLastError() == WSAENOTCONN) {
-        shutdown_result = SOCKET_NOERROR;
-    }
-
-    if (shutdown_result == SOCKET_ERROR) {
-        std::string error = _get_last_error("Failed to shutdown connection.");
-
-        std::cerr << error << std::endl;
-        // throw std::runtime_error(error.c_str());
-    }
-
-    if (::closesocket(s) == SOCKET_ERROR) {
-        std::string error = _get_last_error("Failed to close socket.");
-
-        std::cerr << error << std::endl;
-        // throw std::runtime_error(error.c_str());
-    }
+    server->socket->close();
 }

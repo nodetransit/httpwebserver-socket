@@ -7,6 +7,9 @@
 #include <cstdlib>
 
 #include "common.hpp"
+#include "raw_socket.hpp"
+#include "overlapped_event.hpp"
+#include "pipe.hpp"
 #include "interfaces/socket.hpp"
 #include "connection.hpp"
 #include "timeval.hpp"
@@ -18,20 +21,12 @@ typedef void (* event_callback)(void*, void*);
 class __HttpWebServerSocketPort__ WindowsTcpSocket :
       public nt::http::interfaces::Socket
 {
+
 private:
-    std::string        port;
-    unsigned int       queue_count;
+    std::shared_ptr<Connection> server;
+    std::shared_ptr<Connection> pipe;
     const unsigned int max_connections;
-
-    SOCKET server_pipe;
-    SOCKET server_socket;
-
-    bool is_open;
-
     std::vector<std::shared_ptr<Connection>> connections;
-
-protected:
-    int protocol;
 
 public:
     WindowsTcpSocket();
@@ -44,11 +39,9 @@ public:
     void close();
 
 private:
-    void close_socket(SOCKET);
     bool select();
     void receive_data(SOCKET);
     void write_data(SOCKET);
-    inline void reset_wsa_event(HANDLE);
 
 };
 
