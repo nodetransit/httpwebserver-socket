@@ -7,6 +7,9 @@
 #include <cstdlib>
 
 #include "common.hpp"
+#include "raw_socket.hpp"
+#include "pipe.hpp"
+#include "connection.hpp"
 #include "interfaces/socket.hpp"
 #include "connection.hpp"
 #include "timeval.hpp"
@@ -19,14 +22,11 @@ class __HttpWebServerSocketPort__ LinuxTcpSocket :
       public nt::http::interfaces::Socket
 {
 private:
-    std::string        port;
+    std::shared_ptr<Connection> server;
+    std::shared_ptr<Connection> pipe;
+private:
     unsigned int       queue_count;
     const unsigned int max_connections;
-
-    SOCKET server_pipe;
-    SOCKET server_socket;
-
-    bool is_open;
 
     std::vector<std::shared_ptr<Connection>> connections;
 
@@ -34,12 +34,9 @@ private:
     fd_set write_list;
     fd_set error_list;
 
-protected:
-    int protocol;
-
 public:
     LinuxTcpSocket();
-    ~LinuxTcpSocket() noexcept;
+    ~LinuxTcpSocket() noexcept = default;
 
     void bind(const char*, const char*);
     void bind(const char*, const unsigned short);
@@ -48,7 +45,6 @@ public:
     void close();
 
 private:
-    void close_socket(SOCKET);
     void reset_socket_lists();
     unsigned short get_last_socket();
     bool select();
