@@ -36,21 +36,51 @@ _main()
     run(s);
 }
 
+static inline bool
+_is_set(std::vector<int> bits, int set)
+{
+    bool is_set = false;
+
+    for (auto& bit :bits) {
+        is_set |= static_cast<bool>(bit & set);
+
+        if (is_set) break;
+    }
+
+    return is_set;
+}
+
 static void
 _main_raw()
 {
     auto socket = std::make_unique<nt::http::RawSocket>();
+    auto event  = std::make_unique<nt::http::OverlappedEvent>(socket.get());
 
     socket->bind("0.0.0.0", "http");
     socket->listen(8);
+    event->set();
 
-    auto client = std::unique_ptr<nt::http::RawSocket>(socket->accept());
+#ifdef LOSE
+    HANDLE handles[] = {event->handle};
 
-    char buffer[MAX_INPUT] = {0};
+    ::WaitForMultipleObjects(1, handles, false, INFINITE);
+    WSANETWORKEVENTS networkEvents;
+    if (::WSAEnumNetworkEvents(socket->socket, event->handle, &networkEvents) == SOCKET_ERROR) {
+        std::cout << "enumerate socket events error\n";
+    }
 
-    ::recv(client->socket, buffer, sizeof(buffer) - 1, 0);
+    if (_is_set({FD_ACCEPT}, networkEvents.lNetworkEvents)) {
+        std::cout << "accept\n";
 
-    std::cout << buffer;
+        auto client = socket->accept();
+
+        char buffer[MAX_INPUT] = {0};
+
+        ::recv(client->socket, buffer, sizeof(buffer) - 1, 0);
+
+        std::cout << buffer;
+    }
+#endif
 }
 
 int
