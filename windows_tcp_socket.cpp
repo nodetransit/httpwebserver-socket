@@ -231,12 +231,7 @@ _tls()
 }
 
 WindowsTcpSocket::WindowsTcpSocket() :
-      port("0"),
-      queue_count(0),
-      max_connections(FD_SETSIZE - 1),
-      server_socket(0),
-      is_open(false),
-      protocol(0)
+      max_connections(FD_SETSIZE - 1)
 {
     _tls();
 
@@ -449,8 +444,6 @@ _is_set(std::vector<int> bits, int set)
 void
 WindowsTcpSocket::open()
 {
-    unsigned int ceiling = 0;
-
     while (true) {
         std::cout << "listening from " << connections.size() << " connections\n";
 
@@ -467,9 +460,6 @@ WindowsTcpSocket::open()
             throw std::runtime_error(error.c_str());
         } else if (select_result == WAIT_TIMEOUT) {
             std::string error = _get_last_error("Timeout.");
-
-            close_socket(server_socket);
-            // ::WSACloseEvent(ev_handle);
 
             throw std::runtime_error(error.c_str());
         }
@@ -546,14 +536,6 @@ WindowsTcpSocket::open()
 
 void
 WindowsTcpSocket::close()
-{
-    server->socket->close();
-
-    is_open = false;
-}
-
-void
-WindowsTcpSocket::close_socket(SOCKET s)
 {
     server->socket->close();
 }

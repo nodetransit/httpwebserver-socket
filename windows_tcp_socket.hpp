@@ -25,21 +25,8 @@ class __HttpWebServerSocketPort__ WindowsTcpSocket :
 private:
     std::shared_ptr<Connection> server;
     std::shared_ptr<Connection> pipe;
-    // --------------------------------------------------------------------------------
-private:
-    std::string        port;
-    unsigned int       queue_count;
     const unsigned int max_connections;
-
-    SOCKET server_pipe;
-    SOCKET server_socket;
-
-    bool is_open;
-
     std::vector<std::shared_ptr<Connection>> connections;
-
-protected:
-    int protocol;
 
 public:
     WindowsTcpSocket();
@@ -52,7 +39,6 @@ public:
     void close();
 
 private:
-    void close_socket(SOCKET);
     bool select();
     void receive_data(SOCKET);
     void write_data(SOCKET);
