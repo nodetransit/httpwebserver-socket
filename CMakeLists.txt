@@ -160,9 +160,13 @@ if (NOT MSVC)
                                                    #"-Wno-incompatible-pointer-types"
                                                    "-Wno-unused-parameter"
                                                    "-Wno-sign-compare"
+                                                   "-Wno-overflow"
                                                    #"-Wno-unused-variable"
                                                    "-Wno-unused-function"
                                                    "-Wno-format")
+        # if (MINGW)
+        #     list (APPEND COMMON_COMPILE_OPTIONS "-Wno-sign-compare")
+        # endif ()
     endif ()
 else ()
     list (APPEND COMMON_COMPILE_OPTIONS "-GR"

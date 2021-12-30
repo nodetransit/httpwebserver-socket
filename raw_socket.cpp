@@ -22,6 +22,7 @@ _wsa_startup()
 }
 #endif
 
+namespace nt { namespace http {
 static inline int
 _get_errno()
 {
@@ -45,6 +46,8 @@ _set_errno(int code)
 
     return prev;
 }
+
+}}
 
 static inline void
 _close_socket(int socket)
